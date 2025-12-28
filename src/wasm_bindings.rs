@@ -308,6 +308,7 @@ pub fn lz4_compress_optimized(input: &[u8]) -> Vec<u8> {
 }
 
 /// Fast path for small buffers: Simple literal copy with RLE detection
+#[allow(dead_code)]
 #[inline(always)]
 fn lz4_fast_path(input: &[u8]) -> Vec<u8> {
     let len = input.len();
@@ -516,7 +517,7 @@ pub fn conv2d_optimized(
     let mut output = vec![0.0f32; out_w * out_h];
 
     // Pre-compute kernel size squared
-    let k_sq = kernel_size * kernel_size;
+    let _k_sq = kernel_size * kernel_size;
 
     // Process in 4x4 output tiles
     const TILE: usize = 4;

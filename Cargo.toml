@@ -7,7 +7,8 @@ edition = "2021"
 crate-type = ["cdylib", "rlib"]
 
 [features]
-default = []
+default = ["cli"]
+cli = ["clap", "tokio", "tracing-subscriber"]
 wasm = ["wasm-bindgen", "getrandom/js"]
 
 [dependencies]
