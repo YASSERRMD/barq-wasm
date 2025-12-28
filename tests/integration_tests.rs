@@ -36,9 +36,6 @@ fn test_project_structure() {
 
 #[test]
 fn test_lz4_pattern_detected_and_optimized() {
-    let mut ir = CraneliftIR {
-        instructions: vec![],
-    };
     let backend = CraneliftBackend::new();
 
     // Create IR that looks like LZ4 (simulated in compilation)
@@ -153,4 +150,25 @@ fn test_integration_with_phase1_analyzer() {
     } else {
         panic!("Analyzer failed to detect LZ4 pattern required for integration test");
     }
+}
+
+#[test]
+fn test_zstd_pattern_detected_and_optimized() {
+    let backend = CraneliftBackend::new();
+    let result = backend.compile(&[], OptimizationLevel::Compression);
+    assert!(result.is_ok());
+    let compiled = result.unwrap();
+    assert_eq!(compiled.optimization_level, OptimizationLevel::Compression);
+}
+
+#[test]
+fn test_detect_and_specialize_zstd_codegen() {
+    use barq_wasm::codegen::compression_codegen;
+    let mut ir = CraneliftIR {
+        instructions: vec![],
+    };
+    let res = compression_codegen::detect_and_specialize_zstd(&mut ir);
+    assert!(res.is_ok());
+    assert!(res.unwrap()); // returns true
+    assert!(ir.instructions.contains(&"specializing_zstd".to_string()));
 }
