@@ -286,10 +286,10 @@ fn quantize_4_fast(v0: f32, v1: f32, v2: f32, v3: f32, inv_scale: f32) -> (i8, i
     };
 
     // Clamp using integer ops (faster than float compare)
-    let c0 = r0.max(-128).min(127) as i8;
-    let c1 = r1.max(-128).min(127) as i8;
-    let c2 = r2.max(-128).min(127) as i8;
-    let c3 = r3.max(-128).min(127) as i8;
+    let c0 = r0.clamp(-128, 127) as i8;
+    let c1 = r1.clamp(-128, 127) as i8;
+    let c2 = r2.clamp(-128, 127) as i8;
+    let c3 = r3.clamp(-128, 127) as i8;
 
     (c0, c1, c2, c3)
 }
@@ -303,7 +303,7 @@ fn quantize_single_fast(v: f32, inv_scale: f32) -> i8 {
     } else {
         (s - 0.5) as i32
     };
-    r.max(-128).min(127) as i8
+    r.clamp(-128, 127) as i8
 }
 
 /// Scalar INT8 quantization (baseline)
@@ -314,7 +314,7 @@ pub fn quantize_int8_scalar(input: &[f32], scale: f32) -> Vec<i8> {
         .iter()
         .map(|&x| {
             let val = (x * inv_scale).round();
-            val.max(-128.0).min(127.0) as i8
+            val.clamp(-128.0, 127.0) as i8
         })
         .collect()
 }
@@ -356,8 +356,8 @@ fn lz4_fast_path(input: &[u8]) -> Vec<u8> {
     // Quick entropy check - if data is mostly unique, skip compression
     let sample_size = len.min(256);
     let mut byte_counts = [0u8; 256];
-    for i in 0..sample_size {
-        let idx = input[i] as usize;
+    for byte in input.iter().take(sample_size) {
+        let idx = *byte as usize;
         byte_counts[idx] = byte_counts[idx].saturating_add(1);
     }
 
@@ -540,7 +540,7 @@ pub fn lz4_compress_scalar(input: &[u8]) -> Vec<u8> {
 /// High-performance Conv2D with fused operations
 /// - im2col memory layout for sequential access
 /// - Tiled processing for L1 cache
-/// - Fused ReLU (no extra memory pass)
+///
 /// Target: 3-4x faster than naive nested loops
 #[cfg_attr(feature = "wasm", wasm_bindgen)]
 pub fn conv2d_optimized(
