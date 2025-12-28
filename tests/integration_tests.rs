@@ -164,10 +164,8 @@ fn test_detect_and_specialize_zstd_codegen() {
 fn test_avx2_dot_product_generated() {
     let code = VectorAccelerator::emit_simd_code(VectorOpType::DotProduct, 1024).unwrap();
     if code.features.has_avx2 {
-        // Expect vfmadd231ps (0xC4 0xE2 0x79) or basic structure check
         assert!(!code.machine_code.is_empty());
     } else {
-        // Fallback
         assert!(!code.machine_code.is_empty());
     }
 }
@@ -198,7 +196,6 @@ fn test_int8_quantization_generated() {
 
 #[test]
 fn test_dot_product_pattern_optimized() {
-    // Phase 1 + Phase 3 Integration
     let mut bytecode = Vec::new();
     bytecode.extend_from_slice(&[0x03, 0x0b]); // loop depth 1
     for _ in 0..25 {
@@ -215,7 +212,84 @@ fn test_dot_product_pattern_optimized() {
     assert!(dot_prod.is_some());
     assert!(dot_prod.unwrap().confidence >= 0.8);
 
-    // If detected, we emit SIMD code (simulation)
     let code = VectorAccelerator::emit_simd_code(VectorOpType::DotProduct, 1024);
     assert!(code.is_ok());
+}
+
+// --- DATABASE OPTIMIZATION TESTS ---
+
+#[test]
+fn test_mongodb_pattern_optimized() {
+    use barq_wasm::codegen::database_codegen;
+    let mut ir = CraneliftIR {
+        instructions: vec![],
+    };
+
+    // Simulate detecting MongoDB pattern via Analyzer (simplified here)
+    // Directly call optimizer
+    let code = database_codegen::emit_mongodb_optimized(&mut ir);
+    assert!(code.is_ok());
+
+    // Verify optimizations active
+    assert!(ir.instructions.contains(&"enable_conn_pool".to_string()));
+    assert!(ir.instructions.contains(&"use_sys_pwrite64".to_string()));
+    assert!(ir.instructions.contains(&"enable_batching".to_string()));
+
+    assert!(!code.unwrap().is_empty());
+}
+
+#[test]
+fn test_filenet_pattern_optimized() {
+    use barq_wasm::codegen::database_codegen;
+    let mut ir = CraneliftIR {
+        instructions: vec![],
+    };
+
+    let code = database_codegen::emit_filenet_optimized(&mut ir);
+    assert!(code.is_ok());
+    assert!(ir.instructions.contains(&"optimize_doc_fields".to_string()));
+    assert!(!code.unwrap().is_empty());
+}
+
+// --- AI OPTIMIZATION TESTS ---
+
+#[test]
+fn test_int8_quantization_works() {
+    use barq_wasm::codegen::ai_codegen;
+    let mut ir = CraneliftIR {
+        instructions: vec![],
+    };
+
+    let code = ai_codegen::emit_int8_native_code(&mut ir);
+    assert!(code.is_ok());
+    assert!(ir.instructions.contains(&"int8_vector_ops".to_string()));
+    assert!(!code.unwrap().is_empty());
+}
+
+#[test]
+fn test_convolution_optimized() {
+    use barq_wasm::codegen::ai_codegen;
+    let mut ir = CraneliftIR {
+        instructions: vec![],
+    };
+
+    let code = ai_codegen::emit_convolution_optimized(&mut ir);
+    assert!(code.is_ok());
+    assert!(ir.instructions.contains(&"tiled_convolution".to_string()));
+    assert!(!code.unwrap().is_empty());
+}
+
+#[test]
+fn test_attention_layer_optimized() {
+    use barq_wasm::codegen::ai_codegen;
+    let mut ir = CraneliftIR {
+        instructions: vec![],
+    };
+
+    let code = ai_codegen::emit_attention_layer(&mut ir);
+    assert!(code.is_ok());
+    assert!(ir
+        .instructions
+        .contains(&"fused_softmax_matmul".to_string()));
+    assert!(!code.unwrap().is_empty());
 }
