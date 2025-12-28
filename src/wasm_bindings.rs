@@ -711,3 +711,517 @@ pub fn cosine_similarity_scalar(a: &[f32], b: &[f32]) -> f32 {
         0.0
     }
 }
+
+// ============================================================================
+// ADDITIONAL VECTOR OPERATIONS
+// ============================================================================
+
+/// Vector addition: c = a + b
+#[cfg_attr(feature = "wasm", wasm_bindgen)]
+pub fn vector_add(a: &[f32], b: &[f32]) -> Vec<f32> {
+    let len = a.len().min(b.len());
+    let mut result = Vec::with_capacity(len);
+
+    let chunks = len / 8;
+    let mut i = 0;
+
+    while i < chunks * 8 {
+        result.push(a[i] + b[i]);
+        result.push(a[i + 1] + b[i + 1]);
+        result.push(a[i + 2] + b[i + 2]);
+        result.push(a[i + 3] + b[i + 3]);
+        result.push(a[i + 4] + b[i + 4]);
+        result.push(a[i + 5] + b[i + 5]);
+        result.push(a[i + 6] + b[i + 6]);
+        result.push(a[i + 7] + b[i + 7]);
+        i += 8;
+    }
+
+    while i < len {
+        result.push(a[i] + b[i]);
+        i += 1;
+    }
+
+    result
+}
+
+/// Vector subtraction: c = a - b
+#[cfg_attr(feature = "wasm", wasm_bindgen)]
+pub fn vector_subtract(a: &[f32], b: &[f32]) -> Vec<f32> {
+    let len = a.len().min(b.len());
+    let mut result = Vec::with_capacity(len);
+
+    let chunks = len / 8;
+    let mut i = 0;
+
+    while i < chunks * 8 {
+        result.push(a[i] - b[i]);
+        result.push(a[i + 1] - b[i + 1]);
+        result.push(a[i + 2] - b[i + 2]);
+        result.push(a[i + 3] - b[i + 3]);
+        result.push(a[i + 4] - b[i + 4]);
+        result.push(a[i + 5] - b[i + 5]);
+        result.push(a[i + 6] - b[i + 6]);
+        result.push(a[i + 7] - b[i + 7]);
+        i += 8;
+    }
+
+    while i < len {
+        result.push(a[i] - b[i]);
+        i += 1;
+    }
+
+    result
+}
+
+/// Vector scaling: c = a * scalar
+#[cfg_attr(feature = "wasm", wasm_bindgen)]
+pub fn vector_scale(a: &[f32], scalar: f32) -> Vec<f32> {
+    let len = a.len();
+    let mut result = Vec::with_capacity(len);
+
+    let chunks = len / 8;
+    let mut i = 0;
+
+    while i < chunks * 8 {
+        result.push(a[i] * scalar);
+        result.push(a[i + 1] * scalar);
+        result.push(a[i + 2] * scalar);
+        result.push(a[i + 3] * scalar);
+        result.push(a[i + 4] * scalar);
+        result.push(a[i + 5] * scalar);
+        result.push(a[i + 6] * scalar);
+        result.push(a[i + 7] * scalar);
+        i += 8;
+    }
+
+    while i < len {
+        result.push(a[i] * scalar);
+        i += 1;
+    }
+
+    result
+}
+
+/// Element-wise multiplication (Hadamard product): c = a * b
+#[cfg_attr(feature = "wasm", wasm_bindgen)]
+pub fn vector_elementwise_multiply(a: &[f32], b: &[f32]) -> Vec<f32> {
+    let len = a.len().min(b.len());
+    let mut result = Vec::with_capacity(len);
+
+    let chunks = len / 8;
+    let mut i = 0;
+
+    while i < chunks * 8 {
+        result.push(a[i] * b[i]);
+        result.push(a[i + 1] * b[i + 1]);
+        result.push(a[i + 2] * b[i + 2]);
+        result.push(a[i + 3] * b[i + 3]);
+        result.push(a[i + 4] * b[i + 4]);
+        result.push(a[i + 5] * b[i + 5]);
+        result.push(a[i + 6] * b[i + 6]);
+        result.push(a[i + 7] * b[i + 7]);
+        i += 8;
+    }
+
+    while i < len {
+        result.push(a[i] * b[i]);
+        i += 1;
+    }
+
+    result
+}
+
+// ============================================================================
+// ADDITIONAL MATRIX OPERATIONS
+// ============================================================================
+
+/// Matrix transpose (n x m -> m x n)
+#[cfg_attr(feature = "wasm", wasm_bindgen)]
+pub fn matrix_transpose(a: &[f32], rows: usize, cols: usize) -> Vec<f32> {
+    let mut result = vec![0.0f32; rows * cols];
+
+    for i in 0..rows {
+        for j in 0..cols {
+            result[j * rows + i] = a[i * cols + j];
+        }
+    }
+
+    result
+}
+
+/// Matrix addition: C = A + B
+#[cfg_attr(feature = "wasm", wasm_bindgen)]
+pub fn matrix_add(a: &[f32], b: &[f32]) -> Vec<f32> {
+    vector_add(a, b)
+}
+
+/// Matrix scalar multiplication: C = A * scalar
+#[cfg_attr(feature = "wasm", wasm_bindgen)]
+pub fn matrix_scalar_multiply(a: &[f32], scalar: f32) -> Vec<f32> {
+    vector_scale(a, scalar)
+}
+
+// ============================================================================
+// STATISTICAL FUNCTIONS
+// ============================================================================
+
+/// Compute mean of a vector
+#[cfg_attr(feature = "wasm", wasm_bindgen)]
+pub fn mean(a: &[f32]) -> f32 {
+    if a.is_empty() {
+        return 0.0;
+    }
+
+    let mut sum: f32 = 0.0;
+    let chunks = a.len() / 8;
+    let mut i = 0;
+
+    while i < chunks * 8 {
+        sum += a[i] + a[i + 1] + a[i + 2] + a[i + 3] + a[i + 4] + a[i + 5] + a[i + 6] + a[i + 7];
+        i += 8;
+    }
+
+    while i < a.len() {
+        sum += a[i];
+        i += 1;
+    }
+
+    sum / a.len() as f32
+}
+
+/// Compute variance of a vector
+#[cfg_attr(feature = "wasm", wasm_bindgen)]
+pub fn variance(a: &[f32]) -> f32 {
+    if a.len() < 2 {
+        return 0.0;
+    }
+
+    let m = mean(a);
+    let mut sum_sq: f32 = 0.0;
+
+    for &x in a.iter() {
+        let diff = x - m;
+        sum_sq += diff * diff;
+    }
+
+    sum_sq / (a.len() - 1) as f32
+}
+
+/// Compute standard deviation
+#[cfg_attr(feature = "wasm", wasm_bindgen)]
+pub fn std_dev(a: &[f32]) -> f32 {
+    variance(a).sqrt()
+}
+
+/// Softmax function (numerically stable)
+#[cfg_attr(feature = "wasm", wasm_bindgen)]
+pub fn softmax(a: &[f32]) -> Vec<f32> {
+    if a.is_empty() {
+        return vec![];
+    }
+
+    // Find max for numerical stability
+    let max_val = a.iter().cloned().fold(f32::NEG_INFINITY, f32::max);
+
+    // Compute exp(x - max)
+    let mut exp_vals: Vec<f32> = a.iter().map(|&x| (x - max_val).exp()).collect();
+
+    // Compute sum
+    let sum: f32 = exp_vals.iter().sum();
+
+    // Normalize
+    for val in &mut exp_vals {
+        *val /= sum;
+    }
+
+    exp_vals
+}
+
+/// Sigmoid activation function
+#[cfg_attr(feature = "wasm", wasm_bindgen)]
+pub fn sigmoid(a: &[f32]) -> Vec<f32> {
+    let len = a.len();
+    let mut result = Vec::with_capacity(len);
+
+    for &x in a.iter() {
+        result.push(1.0 / (1.0 + (-x).exp()));
+    }
+
+    result
+}
+
+/// ReLU activation function
+#[cfg_attr(feature = "wasm", wasm_bindgen)]
+pub fn relu(a: &[f32]) -> Vec<f32> {
+    let len = a.len();
+    let mut result = Vec::with_capacity(len);
+
+    let chunks = len / 8;
+    let mut i = 0;
+
+    while i < chunks * 8 {
+        result.push(a[i].max(0.0));
+        result.push(a[i + 1].max(0.0));
+        result.push(a[i + 2].max(0.0));
+        result.push(a[i + 3].max(0.0));
+        result.push(a[i + 4].max(0.0));
+        result.push(a[i + 5].max(0.0));
+        result.push(a[i + 6].max(0.0));
+        result.push(a[i + 7].max(0.0));
+        i += 8;
+    }
+
+    while i < len {
+        result.push(a[i].max(0.0));
+        i += 1;
+    }
+
+    result
+}
+
+/// Leaky ReLU activation function
+#[cfg_attr(feature = "wasm", wasm_bindgen)]
+pub fn leaky_relu(a: &[f32], alpha: f32) -> Vec<f32> {
+    a.iter()
+        .map(|&x| if x > 0.0 { x } else { alpha * x })
+        .collect()
+}
+
+// ============================================================================
+// DISTANCE METRICS
+// ============================================================================
+
+/// Euclidean distance between two vectors
+#[cfg_attr(feature = "wasm", wasm_bindgen)]
+pub fn euclidean_distance(a: &[f32], b: &[f32]) -> f32 {
+    let len = a.len().min(b.len());
+    let mut sum: f32 = 0.0;
+
+    let chunks = len / 8;
+    let mut i = 0;
+
+    while i < chunks * 8 {
+        let d0 = a[i] - b[i];
+        let d1 = a[i + 1] - b[i + 1];
+        let d2 = a[i + 2] - b[i + 2];
+        let d3 = a[i + 3] - b[i + 3];
+        let d4 = a[i + 4] - b[i + 4];
+        let d5 = a[i + 5] - b[i + 5];
+        let d6 = a[i + 6] - b[i + 6];
+        let d7 = a[i + 7] - b[i + 7];
+        sum += d0 * d0 + d1 * d1 + d2 * d2 + d3 * d3 + d4 * d4 + d5 * d5 + d6 * d6 + d7 * d7;
+        i += 8;
+    }
+
+    while i < len {
+        let d = a[i] - b[i];
+        sum += d * d;
+        i += 1;
+    }
+
+    sum.sqrt()
+}
+
+/// Manhattan distance (L1 norm) between two vectors
+#[cfg_attr(feature = "wasm", wasm_bindgen)]
+pub fn manhattan_distance(a: &[f32], b: &[f32]) -> f32 {
+    let len = a.len().min(b.len());
+    let mut sum: f32 = 0.0;
+
+    let chunks = len / 8;
+    let mut i = 0;
+
+    while i < chunks * 8 {
+        sum += (a[i] - b[i]).abs();
+        sum += (a[i + 1] - b[i + 1]).abs();
+        sum += (a[i + 2] - b[i + 2]).abs();
+        sum += (a[i + 3] - b[i + 3]).abs();
+        sum += (a[i + 4] - b[i + 4]).abs();
+        sum += (a[i + 5] - b[i + 5]).abs();
+        sum += (a[i + 6] - b[i + 6]).abs();
+        sum += (a[i + 7] - b[i + 7]).abs();
+        i += 8;
+    }
+
+    while i < len {
+        sum += (a[i] - b[i]).abs();
+        i += 1;
+    }
+
+    sum
+}
+
+// ============================================================================
+// AI/ML ADDITIONAL FUNCTIONS
+// ============================================================================
+
+/// Dequantize INT8 back to float32
+#[cfg_attr(feature = "wasm", wasm_bindgen)]
+pub fn dequantize_int8(input: &[i8], scale: f32) -> Vec<f32> {
+    let len = input.len();
+    let mut output = Vec::with_capacity(len);
+
+    for &val in input.iter() {
+        output.push(val as f32 * scale);
+    }
+
+    output
+}
+
+/// Batch normalization: (x - mean) / sqrt(var + eps) * gamma + beta
+#[cfg_attr(feature = "wasm", wasm_bindgen)]
+pub fn batch_normalize(input: &[f32], gamma: f32, beta: f32, epsilon: f32) -> Vec<f32> {
+    if input.is_empty() {
+        return vec![];
+    }
+
+    let m = mean(input);
+    let v = variance(input);
+    let std = (v + epsilon).sqrt();
+
+    input
+        .iter()
+        .map(|&x| ((x - m) / std) * gamma + beta)
+        .collect()
+}
+
+/// Max pooling 2D (stride = kernel_size for non-overlapping)
+#[cfg_attr(feature = "wasm", wasm_bindgen)]
+pub fn max_pooling_2d(input: &[f32], width: usize, height: usize, pool_size: usize) -> Vec<f32> {
+    let out_w = width / pool_size;
+    let out_h = height / pool_size;
+    let mut output = Vec::with_capacity(out_w * out_h);
+
+    for y in 0..out_h {
+        for x in 0..out_w {
+            let mut max_val = f32::NEG_INFINITY;
+            for py in 0..pool_size {
+                for px in 0..pool_size {
+                    let idx = (y * pool_size + py) * width + (x * pool_size + px);
+                    if idx < input.len() {
+                        max_val = max_val.max(input[idx]);
+                    }
+                }
+            }
+            output.push(max_val);
+        }
+    }
+
+    output
+}
+
+/// Average pooling 2D
+#[cfg_attr(feature = "wasm", wasm_bindgen)]
+pub fn avg_pooling_2d(input: &[f32], width: usize, height: usize, pool_size: usize) -> Vec<f32> {
+    let out_w = width / pool_size;
+    let out_h = height / pool_size;
+    let pool_area = (pool_size * pool_size) as f32;
+    let mut output = Vec::with_capacity(out_w * out_h);
+
+    for y in 0..out_h {
+        for x in 0..out_w {
+            let mut sum: f32 = 0.0;
+            for py in 0..pool_size {
+                for px in 0..pool_size {
+                    let idx = (y * pool_size + py) * width + (x * pool_size + px);
+                    if idx < input.len() {
+                        sum += input[idx];
+                    }
+                }
+            }
+            output.push(sum / pool_area);
+        }
+    }
+
+    output
+}
+
+/// Sum of all elements in a vector
+#[cfg_attr(feature = "wasm", wasm_bindgen)]
+pub fn vector_sum(a: &[f32]) -> f32 {
+    let mut sum: f32 = 0.0;
+    let chunks = a.len() / 8;
+    let mut i = 0;
+
+    while i < chunks * 8 {
+        sum += a[i] + a[i + 1] + a[i + 2] + a[i + 3] + a[i + 4] + a[i + 5] + a[i + 6] + a[i + 7];
+        i += 8;
+    }
+
+    while i < a.len() {
+        sum += a[i];
+        i += 1;
+    }
+
+    sum
+}
+
+/// Find minimum value in a vector
+#[cfg_attr(feature = "wasm", wasm_bindgen)]
+pub fn vector_min(a: &[f32]) -> f32 {
+    a.iter().cloned().fold(f32::INFINITY, f32::min)
+}
+
+/// Find maximum value in a vector
+#[cfg_attr(feature = "wasm", wasm_bindgen)]
+pub fn vector_max(a: &[f32]) -> f32 {
+    a.iter().cloned().fold(f32::NEG_INFINITY, f32::max)
+}
+
+/// Argmax: index of maximum value
+#[cfg_attr(feature = "wasm", wasm_bindgen)]
+pub fn argmax(a: &[f32]) -> usize {
+    if a.is_empty() {
+        return 0;
+    }
+
+    let mut max_idx = 0;
+    let mut max_val = a[0];
+
+    for (i, &val) in a.iter().enumerate() {
+        if val > max_val {
+            max_val = val;
+            max_idx = i;
+        }
+    }
+
+    max_idx
+}
+
+/// Argmin: index of minimum value
+#[cfg_attr(feature = "wasm", wasm_bindgen)]
+pub fn argmin(a: &[f32]) -> usize {
+    if a.is_empty() {
+        return 0;
+    }
+
+    let mut min_idx = 0;
+    let mut min_val = a[0];
+
+    for (i, &val) in a.iter().enumerate() {
+        if val < min_val {
+            min_val = val;
+            min_idx = i;
+        }
+    }
+
+    min_idx
+}
+
+/// Clamp vector values between min and max
+#[cfg_attr(feature = "wasm", wasm_bindgen)]
+pub fn vector_clamp(a: &[f32], min_val: f32, max_val: f32) -> Vec<f32> {
+    a.iter().map(|&x| x.clamp(min_val, max_val)).collect()
+}
+
+/// Normalize vector to unit length
+#[cfg_attr(feature = "wasm", wasm_bindgen)]
+pub fn vector_normalize(a: &[f32]) -> Vec<f32> {
+    let norm = vector_norm_simd(a);
+    if norm > 0.0 {
+        vector_scale(a, 1.0 / norm)
+    } else {
+        a.to_vec()
+    }
+}

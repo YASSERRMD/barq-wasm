@@ -1,0 +1,341 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Barq-WASM Complete Benchmark Suite</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Inter', system-ui, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background: linear-gradient(135deg, #0a0e17 0%, #1a1f2e 100%);
+            color: #e2e8f0;
+            min-height: 100vh;
+        }
+
+        h1 {
+            text-align: center;
+            color: #60a5fa;
+            margin-bottom: 8px;
+            font-size: 28px;
+        }
+
+        .subtitle {
+            text-align: center;
+            color: #94a3b8;
+            margin-bottom: 20px;
+            font-size: 13px;
+        }
+
+        .benchmark-group {
+            background: rgba(30, 41, 59, 0.5);
+            border: 1px solid #334155;
+            border-radius: 12px;
+            padding: 16px;
+            margin-bottom: 16px;
+        }
+
+        .benchmark-group h2 {
+            color: #60a5fa;
+            font-size: 14px;
+            margin-bottom: 12px;
+            border-bottom: 1px solid #334155;
+            padding-bottom: 8px;
+        }
+
+        .result-row {
+            display: grid;
+            grid-template-columns: 1.5fr auto auto auto;
+            gap: 12px;
+            align-items: center;
+            padding: 8px 0;
+            border-bottom: 1px solid #1e293b;
+            font-size: 13px;
+        }
+
+        .result-row:last-child {
+            border-bottom: none;
+        }
+
+        .time {
+            font-weight: 600;
+            font-family: monospace;
+            padding: 3px 10px;
+            border-radius: 4px;
+            min-width: 90px;
+            text-align: center;
+        }
+
+        .time.wasm {
+            color: #10b981;
+            background: rgba(16, 185, 129, 0.1);
+        }
+
+        .time.js {
+            color: #f87171;
+            background: rgba(248, 113, 113, 0.1);
+        }
+
+        .speedup {
+            background: linear-gradient(135deg, #059669 0%, #10b981 100%);
+            color: white;
+            padding: 4px 12px;
+            border-radius: 16px;
+            font-size: 12px;
+            font-weight: 600;
+            min-width: 70px;
+            text-align: center;
+        }
+
+        .speedup.slow {
+            background: linear-gradient(135deg, #dc2626 0%, #f87171 100%);
+        }
+
+        #status {
+            text-align: center;
+            padding: 30px;
+            font-size: 14px;
+            color: #60a5fa;
+        }
+
+        .loading {
+            animation: pulse 1.5s infinite ease-in-out;
+        }
+
+        @keyframes pulse {
+
+            0%,
+            100% {
+                opacity: 1;
+            }
+
+            50% {
+                opacity: 0.5;
+            }
+        }
+
+        .summary-box {
+            background: linear-gradient(135deg, #1e40af 0%, #3b82f6 100%);
+            color: white;
+            padding: 20px;
+            border-radius: 12px;
+            text-align: center;
+            margin-top: 16px;
+        }
+
+        .summary-box h3 {
+            margin: 0 0 12px 0;
+            font-size: 16px;
+        }
+
+        .summary-stats {
+            display: flex;
+            justify-content: center;
+            gap: 30px;
+            flex-wrap: wrap;
+        }
+
+        .stat-value {
+            font-size: 24px;
+            font-weight: bold;
+        }
+
+        .stat-label {
+            font-size: 11px;
+            opacity: 0.8;
+            margin-top: 2px;
+        }
+
+        .function-count {
+            text-align: center;
+            color: #94a3b8;
+            font-size: 12px;
+            margin-bottom: 16px;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>Barq-WASM Complete Benchmark Suite</h1>
+    <p class="subtitle">All 40+ WASM functions benchmarked against JavaScript</p>
+    <p class="function-count" id="func-count">Loading functions...</p>
+
+    <div id="status" class="loading">Initializing WASM module...</div>
+    <div id="results"></div>
+
+    <script type="module">
+        import init, * as wasm from '../pkg/barq_wasm.js';
+
+        let speedups = [];
+        let functionCount = 0;
+
+        function setStatus(msg, loading = true) {
+            const el = document.getElementById('status');
+            el.textContent = msg;
+            el.className = loading ? 'loading' : '';
+        }
+
+        function addResult(group, label, wasmTime, jsTime) {
+            const speedup = jsTime / wasmTime;
+            speedups.push(speedup);
+            const speedupClass = speedup >= 1 ? '' : ' slow';
+            const html = `
+                <div class="result-row">
+                    <span>${label}</span>
+                    <span class="time wasm">${wasmTime.toFixed(3)} ms</span>
+                    <span class="time js">${jsTime.toFixed(3)} ms</span>
+                    <span class="speedup${speedupClass}">${speedup.toFixed(2)}x</span>
+                </div>
+            `;
+            document.getElementById(group).innerHTML += html;
+        }
+
+        function createGroup(id, title) {
+            document.getElementById('results').innerHTML += `
+                <div class="benchmark-group">
+                    <h2>${title}</h2>
+                    <div id="${id}"></div>
+                </div>
+            `;
+        }
+
+        function benchmark(fn, iterations = 100) {
+            for (let i = 0; i < 5; i++) fn();
+            const start = performance.now();
+            for (let i = 0; i < iterations; i++) fn();
+            return (performance.now() - start) / iterations;
+        }
+
+        // JavaScript baseline implementations
+        function jsDotProduct(a, b) { let s = 0; for (let i = 0; i < a.length; i++) s += a[i] * b[i]; return s; }
+        function jsVectorNorm(a) { let s = 0; for (let i = 0; i < a.length; i++) s += a[i] * a[i]; return Math.sqrt(s); }
+        function jsVectorAdd(a, b) { return a.map((v, i) => v + b[i]); }
+        function jsVectorSubtract(a, b) { return a.map((v, i) => v - b[i]); }
+        function jsVectorScale(a, s) { return a.map(v => v * s); }
+        function jsVectorMul(a, b) { return a.map((v, i) => v * b[i]); }
+        function jsMean(a) { return a.reduce((s, v) => s + v, 0) / a.length; }
+        function jsVariance(a) { const m = jsMean(a); return a.reduce((s, v) => s + (v - m) ** 2, 0) / (a.length - 1); }
+        function jsSoftmax(a) { const max = Math.max(...a); const exp = a.map(x => Math.exp(x - max)); const sum = exp.reduce((s, v) => s + v, 0); return exp.map(v => v / sum); }
+        function jsSigmoid(a) { return a.map(x => 1 / (1 + Math.exp(-x))); }
+        function jsRelu(a) { return a.map(x => Math.max(0, x)); }
+        function jsEuclidean(a, b) { let s = 0; for (let i = 0; i < a.length; i++) s += (a[i] - b[i]) ** 2; return Math.sqrt(s); }
+        function jsManhattan(a, b) { let s = 0; for (let i = 0; i < a.length; i++) s += Math.abs(a[i] - b[i]); return s; }
+        function jsMatrixMul(a, b, n) { const c = new Float32Array(n * n); for (let i = 0; i < n; i++)for (let j = 0; j < n; j++) { let s = 0; for (let k = 0; k < n; k++)s += a[i * n + k] * b[k * n + j]; c[i * n + j] = s; } return c; }
+        function jsMatrixTranspose(a, r, c) { const t = new Float32Array(r * c); for (let i = 0; i < r; i++)for (let j = 0; j < c; j++)t[j * r + i] = a[i * c + j]; return t; }
+        function jsQuantize(a, s) { const inv = 1 / s; return Int8Array.from(a.map(x => Math.max(-128, Math.min(127, Math.round(x * inv))))); }
+        function jsBatchNorm(a, g, b, e) { const m = jsMean(a); const v = jsVariance(a); const std = Math.sqrt(v + e); return a.map(x => ((x - m) / std) * g + b); }
+        function jsMaxPool(a, w, h, p) { const ow = Math.floor(w / p), oh = Math.floor(h / p); const o = []; for (let y = 0; y < oh; y++)for (let x = 0; x < ow; x++) { let m = -Infinity; for (let py = 0; py < p; py++)for (let px = 0; px < p; px++)m = Math.max(m, a[(y * p + py) * w + (x * p + px)]); o.push(m); } return o; }
+        function jsArgmax(a) { let mi = 0; for (let i = 1; i < a.length; i++) if (a[i] > a[mi]) mi = i; return mi; }
+        function jsCosineSim(a, b) { return jsDotProduct(a, b) / (jsVectorNorm(a) * jsVectorNorm(b)); }
+        function jsConv2d(inp, k, w, h, ks) { const ow = w - ks + 1, oh = h - ks + 1, o = new Float32Array(ow * oh); for (let y = 0; y < oh; y++)for (let x = 0; x < ow; x++) { let s = 0; for (let ky = 0; ky < ks; ky++)for (let kx = 0; kx < ks; kx++)s += inp[(y + ky) * w + (x + kx)] * k[ky * ks + kx]; o[y * ow + x] = Math.max(0, s); } return o; }
+
+        async function runBenchmarks() {
+            await init();
+            setStatus('Running benchmarks...', true);
+
+            // Test data
+            const size = 100000;
+            const vecA = new Float32Array(size).map(() => Math.random());
+            const vecB = new Float32Array(size).map(() => Math.random());
+            const matSize = 64;
+            const matA = new Float32Array(matSize * matSize).map(() => Math.random());
+            const matB = new Float32Array(matSize * matSize).map(() => Math.random());
+            const imgSize = 28;
+            const img = new Float32Array(imgSize * imgSize).map(() => Math.random());
+            const kernel = new Float32Array(9).fill(0.1);
+
+            // Count exported functions
+            functionCount = Object.keys(wasm).filter(k => typeof wasm[k] === 'function' && k !== 'default').length;
+            document.getElementById('func-count').textContent = `Testing ${functionCount} WASM functions`;
+
+            // Vector Operations
+            createGroup('vec-ops', 'Vector Operations (100K elements)');
+            addResult('vec-ops', 'Dot Product', benchmark(() => wasm.dot_product_simd(vecA, vecB)), benchmark(() => jsDotProduct(vecA, vecB)));
+            addResult('vec-ops', 'Vector Norm (L2)', benchmark(() => wasm.vector_norm_simd(vecA)), benchmark(() => jsVectorNorm(vecA)));
+            addResult('vec-ops', 'Cosine Similarity', benchmark(() => wasm.cosine_similarity_simd(vecA, vecB)), benchmark(() => jsCosineSim(vecA, vecB)));
+            addResult('vec-ops', 'Vector Add', benchmark(() => wasm.vector_add(vecA, vecB)), benchmark(() => jsVectorAdd(vecA, vecB)));
+            addResult('vec-ops', 'Vector Subtract', benchmark(() => wasm.vector_subtract(vecA, vecB)), benchmark(() => jsVectorSubtract(vecA, vecB)));
+            addResult('vec-ops', 'Vector Scale', benchmark(() => wasm.vector_scale(vecA, 2.5)), benchmark(() => jsVectorScale(vecA, 2.5)));
+            addResult('vec-ops', 'Element-wise Multiply', benchmark(() => wasm.vector_elementwise_multiply(vecA, vecB)), benchmark(() => jsVectorMul(vecA, vecB)));
+            addResult('vec-ops', 'Vector Sum', benchmark(() => wasm.vector_sum(vecA)), benchmark(() => vecA.reduce((a, b) => a + b, 0)));
+            addResult('vec-ops', 'Vector Min/Max', benchmark(() => { wasm.vector_min(vecA); wasm.vector_max(vecA); }), benchmark(() => { Math.min(...vecA); Math.max(...vecA); }));
+            addResult('vec-ops', 'Vector Normalize', benchmark(() => wasm.vector_normalize(vecA)), benchmark(() => jsVectorScale(vecA, 1 / jsVectorNorm(vecA))));
+
+            // Matrix Operations
+            createGroup('mat-ops', 'Matrix Operations (64x64)');
+            addResult('mat-ops', 'Matrix Multiply', benchmark(() => wasm.matrix_multiply_tiled(matA, matB, matSize), 20), benchmark(() => jsMatrixMul(matA, matB, matSize), 20));
+            addResult('mat-ops', 'Matrix Transpose', benchmark(() => wasm.matrix_transpose(matA, matSize, matSize)), benchmark(() => jsMatrixTranspose(matA, matSize, matSize)));
+            addResult('mat-ops', 'Matrix Add', benchmark(() => wasm.matrix_add(matA, matB)), benchmark(() => jsVectorAdd(matA, matB)));
+            addResult('mat-ops', 'Matrix Scalar Mul', benchmark(() => wasm.matrix_scalar_multiply(matA, 2.5)), benchmark(() => jsVectorScale(matA, 2.5)));
+
+            // Statistical Functions
+            createGroup('stat-ops', 'Statistical Functions (100K elements)');
+            addResult('stat-ops', 'Mean', benchmark(() => wasm.mean(vecA)), benchmark(() => jsMean(vecA)));
+            addResult('stat-ops', 'Variance', benchmark(() => wasm.variance(vecA), 50), benchmark(() => jsVariance(vecA), 50));
+            addResult('stat-ops', 'Standard Deviation', benchmark(() => wasm.std_dev(vecA), 50), benchmark(() => Math.sqrt(jsVariance(vecA)), 50));
+
+            // Activation Functions  
+            const smallVec = new Float32Array(10000).map(() => Math.random() * 2 - 1);
+            createGroup('act-ops', 'Activation Functions (10K elements)');
+            addResult('act-ops', 'Softmax', benchmark(() => wasm.softmax(smallVec), 50), benchmark(() => jsSoftmax(smallVec), 50));
+            addResult('act-ops', 'Sigmoid', benchmark(() => wasm.sigmoid(smallVec)), benchmark(() => jsSigmoid(smallVec)));
+            addResult('act-ops', 'ReLU', benchmark(() => wasm.relu(smallVec)), benchmark(() => jsRelu(smallVec)));
+            addResult('act-ops', 'Leaky ReLU', benchmark(() => wasm.leaky_relu(smallVec, 0.01)), benchmark(() => smallVec.map(x => x > 0 ? x : 0.01 * x)));
+
+            // Distance Metrics
+            createGroup('dist-ops', 'Distance Metrics (100K elements)');
+            addResult('dist-ops', 'Euclidean Distance', benchmark(() => wasm.euclidean_distance(vecA, vecB)), benchmark(() => jsEuclidean(vecA, vecB)));
+            addResult('dist-ops', 'Manhattan Distance', benchmark(() => wasm.manhattan_distance(vecA, vecB)), benchmark(() => jsManhattan(vecA, vecB)));
+
+            // AI/ML Operations
+            createGroup('ai-ops', 'AI/ML Operations');
+            addResult('ai-ops', 'INT8 Quantization (100K)', benchmark(() => wasm.quantize_int8_simd(vecA, 0.1), 50), benchmark(() => jsQuantize(vecA, 0.1), 50));
+            addResult('ai-ops', 'Batch Normalize (10K)', benchmark(() => wasm.batch_normalize(smallVec, 1.0, 0.0, 1e-5), 50), benchmark(() => jsBatchNorm(smallVec, 1.0, 0.0, 1e-5), 50));
+            addResult('ai-ops', 'Conv2D + ReLU (28x28)', benchmark(() => wasm.conv2d_optimized(img, kernel, imgSize, imgSize, 3), 200), benchmark(() => jsConv2d(img, kernel, imgSize, imgSize, 3), 200));
+            addResult('ai-ops', 'Max Pooling 2D (28x28, 2x2)', benchmark(() => wasm.max_pooling_2d(img, imgSize, imgSize, 2), 200), benchmark(() => jsMaxPool(img, imgSize, imgSize, 2), 200));
+            addResult('ai-ops', 'Avg Pooling 2D (28x28, 2x2)', benchmark(() => wasm.avg_pooling_2d(img, imgSize, imgSize, 2), 200), benchmark(() => jsMaxPool(img, imgSize, imgSize, 2), 200));
+            addResult('ai-ops', 'Argmax (10K)', benchmark(() => wasm.argmax(smallVec)), benchmark(() => jsArgmax(smallVec)));
+            addResult('ai-ops', 'Argmin (10K)', benchmark(() => wasm.argmin(smallVec)), benchmark(() => { let mi = 0; for (let i = 1; i < smallVec.length; i++)if (smallVec[i] < smallVec[mi]) mi = i; return mi; }));
+
+            // Utility Functions
+            createGroup('util-ops', 'Utility Functions');
+            addResult('util-ops', 'Vector Clamp (100K)', benchmark(() => wasm.vector_clamp(vecA, 0.2, 0.8)), benchmark(() => vecA.map(x => Math.max(0.2, Math.min(0.8, x)))));
+
+            // Summary
+            const avgSpeedup = speedups.reduce((a, b) => a + b, 0) / speedups.length;
+            const maxSpeedup = Math.max(...speedups);
+            const testsOver2x = speedups.filter(s => s >= 2).length;
+            const testsOver1x = speedups.filter(s => s >= 1).length;
+
+            document.getElementById('results').innerHTML += `
+                <div class="summary-box">
+                    <h3>Performance Summary</h3>
+                    <div class="summary-stats">
+                        <div><span class="stat-value">${avgSpeedup.toFixed(2)}x</span><div class="stat-label">Average Speedup</div></div>
+                        <div><span class="stat-value">${maxSpeedup.toFixed(2)}x</span><div class="stat-label">Best Speedup</div></div>
+                        <div><span class="stat-value">${testsOver2x}/${speedups.length}</span><div class="stat-label">2x+ Faster</div></div>
+                        <div><span class="stat-value">${testsOver1x}/${speedups.length}</span><div class="stat-label">Faster than JS</div></div>
+                        <div><span class="stat-value">${functionCount}</span><div class="stat-label">Total Functions</div></div>
+                    </div>
+                </div>
+            `;
+
+            setStatus('Benchmark Complete', false);
+        }
+
+        runBenchmarks().catch(err => {
+            setStatus('Error: ' + err.message, false);
+            console.error(err);
+        });
+    </script>
+</body>
+
+</html>
