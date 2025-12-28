@@ -836,32 +836,38 @@ pub fn vector_elementwise_multiply(a: &[f32], b: &[f32]) -> Vec<f32> {
 // ADDITIONAL MATRIX OPERATIONS
 // ============================================================================
 
-/// Matrix transpose (n x m -> m x n) with block tiling for cache efficiency
+/// Matrix transpose (n x m -> m x n) with unsafe pointer access for speed
 #[cfg_attr(feature = "wasm", wasm_bindgen)]
 pub fn matrix_transpose(a: &[f32], rows: usize, cols: usize) -> Vec<f32> {
     let mut result = vec![0.0f32; rows * cols];
 
-    // Block size tuned for L1 cache
-    const BLOCK: usize = 16;
+    let src = a.as_ptr();
+    let dst = result.as_mut_ptr();
 
-    // Process in blocks for cache efficiency
-    let row_blocks = (rows + BLOCK - 1) / BLOCK;
-    let col_blocks = (cols + BLOCK - 1) / BLOCK;
+    // Process 4 columns at a time for ILP
+    let col_chunks = cols / 4;
 
-    for bi in 0..row_blocks {
-        let i_start = bi * BLOCK;
-        let i_end = (i_start + BLOCK).min(rows);
+    for i in 0..rows {
+        let row_offset = i * cols;
+        let mut j = 0;
 
-        for bj in 0..col_blocks {
-            let j_start = bj * BLOCK;
-            let j_end = (j_start + BLOCK).min(cols);
-
-            // Transpose block
-            for i in i_start..i_end {
-                for j in j_start..j_end {
-                    result[j * rows + i] = a[i * cols + j];
-                }
+        // Process 4 columns at a time
+        while j < col_chunks * 4 {
+            unsafe {
+                *dst.add(j * rows + i) = *src.add(row_offset + j);
+                *dst.add((j + 1) * rows + i) = *src.add(row_offset + j + 1);
+                *dst.add((j + 2) * rows + i) = *src.add(row_offset + j + 2);
+                *dst.add((j + 3) * rows + i) = *src.add(row_offset + j + 3);
             }
+            j += 4;
+        }
+
+        // Remainder
+        while j < cols {
+            unsafe {
+                *dst.add(j * rows + i) = *src.add(row_offset + j);
+            }
+            j += 1;
         }
     }
 
@@ -1160,18 +1166,41 @@ pub fn max_pooling_2d(input: &[f32], width: usize, height: usize, pool_size: usi
     let out_h = height / pool_size;
     let mut output = Vec::with_capacity(out_w * out_h);
 
-    for y in 0..out_h {
-        for x in 0..out_w {
-            let mut max_val = f32::NEG_INFINITY;
-            for py in 0..pool_size {
-                for px in 0..pool_size {
-                    let idx = (y * pool_size + py) * width + (x * pool_size + px);
-                    if idx < input.len() {
-                        max_val = max_val.max(input[idx]);
-                    }
+    let ptr = input.as_ptr();
+
+    // Fast path for common 2x2 pooling
+    if pool_size == 2 {
+        for y in 0..out_h {
+            let base_y = y * 2 * width;
+            for x in 0..out_w {
+                let base_x = x * 2;
+                unsafe {
+                    let v0 = *ptr.add(base_y + base_x);
+                    let v1 = *ptr.add(base_y + base_x + 1);
+                    let v2 = *ptr.add(base_y + width + base_x);
+                    let v3 = *ptr.add(base_y + width + base_x + 1);
+                    output.push(v0.max(v1).max(v2.max(v3)));
                 }
             }
-            output.push(max_val);
+        }
+    } else {
+        // General case
+        for y in 0..out_h {
+            for x in 0..out_w {
+                let mut max_val = f32::NEG_INFINITY;
+                for py in 0..pool_size {
+                    let row_base = (y * pool_size + py) * width + x * pool_size;
+                    for px in 0..pool_size {
+                        unsafe {
+                            let val = *ptr.add(row_base + px);
+                            if val > max_val {
+                                max_val = val;
+                            }
+                        }
+                    }
+                }
+                output.push(max_val);
+            }
         }
     }
 
@@ -1184,20 +1213,41 @@ pub fn avg_pooling_2d(input: &[f32], width: usize, height: usize, pool_size: usi
     let out_w = width / pool_size;
     let out_h = height / pool_size;
     let pool_area = (pool_size * pool_size) as f32;
+    let inv_area = 1.0 / pool_area;
     let mut output = Vec::with_capacity(out_w * out_h);
 
-    for y in 0..out_h {
-        for x in 0..out_w {
-            let mut sum: f32 = 0.0;
-            for py in 0..pool_size {
-                for px in 0..pool_size {
-                    let idx = (y * pool_size + py) * width + (x * pool_size + px);
-                    if idx < input.len() {
-                        sum += input[idx];
-                    }
+    let ptr = input.as_ptr();
+
+    // Fast path for common 2x2 pooling
+    if pool_size == 2 {
+        for y in 0..out_h {
+            let base_y = y * 2 * width;
+            for x in 0..out_w {
+                let base_x = x * 2;
+                unsafe {
+                    let v0 = *ptr.add(base_y + base_x);
+                    let v1 = *ptr.add(base_y + base_x + 1);
+                    let v2 = *ptr.add(base_y + width + base_x);
+                    let v3 = *ptr.add(base_y + width + base_x + 1);
+                    output.push((v0 + v1 + v2 + v3) * 0.25);
                 }
             }
-            output.push(sum / pool_area);
+        }
+    } else {
+        // General case
+        for y in 0..out_h {
+            for x in 0..out_w {
+                let mut sum: f32 = 0.0;
+                for py in 0..pool_size {
+                    let row_base = (y * pool_size + py) * width + x * pool_size;
+                    for px in 0..pool_size {
+                        unsafe {
+                            sum += *ptr.add(row_base + px);
+                        }
+                    }
+                }
+                output.push(sum * inv_area);
+            }
         }
     }
 
