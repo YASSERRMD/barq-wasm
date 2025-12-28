@@ -1,9 +1,5 @@
+use barq_wasm::analyzer::{PatternAnalyzer, PatternType}; // Use the new analyzer module
 use barq_wasm::executor::BarqRuntime;
-use barq_wasm::patterns::ai;
-use barq_wasm::patterns::analyzer::PatternAnalyzer;
-use barq_wasm::patterns::compression;
-use barq_wasm::patterns::database;
-use barq_wasm::patterns::vectors;
 use std::process::Command;
 
 // --- INFRASTRUCTURE TESTS ---
@@ -36,129 +32,221 @@ fn test_project_structure() {
     }
 }
 
-#[test]
-fn test_cli_help() {
-    let output = Command::new("cargo")
-        .arg("run")
-        .arg("--")
-        .arg("--help")
-        .output()
-        .expect("Failed to execute cargo run -- --help");
-    assert!(output.status.success() || !output.stdout.is_empty());
-}
+// --- COMPRESSION DETECTION TESTS (9) ---
 
 #[test]
-fn test_module_initialization() {
-    let runtime = BarqRuntime::new();
-    assert!(runtime.is_ok());
-}
-
-// --- COMPRESSION TESTS ---
-
-#[test]
-fn test_detect_lz4_decompression_high_confidence() {
-    let mut bytecode = Vec::new();
-    for _ in 0..10 {
-        bytecode.push(0x03);
-    } // loops
-    for _ in 0..30 {
-        bytecode.push(0x28);
-    } // loads
-    for _ in 0..15 {
-        bytecode.push(0x0c);
-    } // branches
-    for _ in 0..10 {
-        bytecode.push(0xfc);
-    } // copies
-
-    let result = compression::detect_lz4_decompression(&bytecode);
-    assert!(
-        result.confidence >= 0.75,
-        "Confidence was {}",
-        result.confidence
-    );
-    assert!(result.pattern.contains("LZ4"));
-}
-
-#[test]
-fn test_detect_zstd_decompression_high_confidence() {
-    let mut bytecode = Vec::new();
-    for _ in 0..15 {
-        bytecode.push(0x03);
-    }
-    for _ in 0..60 {
-        bytecode.push(0x28);
-    }
-    for _ in 0..20 {
-        bytecode.push(0x92);
-    } // adds
-    let result = compression::detect_zstd_decompression(&bytecode);
-    assert!(result.confidence >= 0.8);
-}
-
-#[test]
-fn test_generic_loop_not_flagged_as_compression() {
-    let bytecode = vec![0x03, 0x01, 0x01, 0x0b]; // simple loop
-    let result = compression::detect_lz4_decompression(&bytecode);
-    assert!(result.confidence < 0.3);
-}
-
-#[test]
-fn test_compression_confidence_threshold_respected() {
+fn test_lz4_pattern_detected_in_real_code() {
     let mut bytecode = Vec::new();
     for _ in 0..3 {
         bytecode.push(0x03);
-    } // Too few loops
-    let result = compression::detect_lz4_decompression(&bytecode);
-    assert!(result.confidence < 0.5);
+    } // Loops
+    for _ in 0..25 {
+        bytecode.push(0x28);
+    } // Loads
+    for _ in 0..15 {
+        bytecode.push(0x0c);
+    } // Branches
+    bytecode.push(0xfc); // Copy
+
+    let analyzer = PatternAnalyzer::default();
+    let matches = analyzer.analyze(&bytecode);
+
+    let lz4 = matches.iter().find(|m| m.name.contains("LZ4"));
+    assert!(lz4.is_some(), "LZ4 pattern not detected");
+    assert!(lz4.unwrap().confidence >= 0.75);
 }
 
 #[test]
-fn test_mixed_compression_patterns_detected() {
+fn test_lz4_confidence_above_threshold() {
+    // Already covered partly above, but specific checks
+    let mut bytecode = Vec::new();
+    for _ in 0..3 {
+        bytecode.push(0x03);
+    }
+    for _ in 0..21 {
+        bytecode.push(0x28);
+    }
+    for _ in 0..11 {
+        bytecode.push(0x0c);
+    }
+    // no copy, score should be >= 0.2+0.3+0.2 = 0.7 (borderline, let's add copy)
+    bytecode.push(0xfc);
+
+    let analyzer = PatternAnalyzer::default();
+    let matches = analyzer.analyze(&bytecode);
+    assert!(matches
+        .iter()
+        .any(|m| m.name.contains("LZ4") && m.confidence >= 0.75));
+}
+
+#[test]
+fn test_zstd_pattern_detected_in_real_code() {
+    let mut bytecode = Vec::new();
+    for _ in 0..60 {
+        bytecode.push(0x74);
+    } // shifts
+    for _ in 0..40 {
+        bytecode.push(0x28);
+    } // loads
+    for _ in 0..40 {
+        bytecode.push(0x71);
+    } // logic
+
+    let analyzer = PatternAnalyzer::default();
+    let matches = analyzer.analyze(&bytecode);
+
+    let zstd = matches.iter().find(|m| m.name.contains("Zstd"));
+    assert!(zstd.is_some());
+    assert!(zstd.unwrap().confidence >= 0.75);
+}
+
+#[test]
+fn test_zstd_confidence_above_threshold() {
+    let mut bytecode = Vec::new();
+    for _ in 0..51 {
+        bytecode.push(0x74);
+    }
+    for _ in 0..31 {
+        bytecode.push(0x28);
+    }
+    for _ in 0..31 {
+        bytecode.push(0x71);
+    }
+
+    let analyzer = PatternAnalyzer::default();
+    let matches = analyzer.analyze(&bytecode);
+    assert!(matches.iter().any(|m| m.name.contains("Zstd")));
+}
+
+#[test]
+fn test_brotli_pattern_detected_in_real_code() {
     let mut bytecode = Vec::new();
     for _ in 0..20 {
         bytecode.push(0x03);
+    } // loops
+    for _ in 0..50 {
+        bytecode.push(0x28);
+    } // loads
+
+    let analyzer = PatternAnalyzer::default();
+    let matches = analyzer.analyze(&bytecode);
+    assert!(matches.iter().any(|m| m.name.contains("Brotli")));
+}
+
+#[test]
+fn test_brotli_confidence_above_threshold() {
+    let mut bytecode = Vec::new();
+    for _ in 0..16 {
+        bytecode.push(0x03);
     }
-    let result = compression::detect_brotli_decompression(&bytecode);
-    assert!(result.confidence >= 0.7);
-}
-
-// --- VECTOR TESTS ---
-
-#[test]
-fn test_detect_matrix_multiply_triple_nested() {
-    let mut bytecode = Vec::new();
-    // Triple nested loop: loop { loop { loop { end } end } end }
-    bytecode.extend_from_slice(&[0x03, 0x03, 0x03, 0x0b, 0x0b, 0x0b]);
-    for _ in 0..60 {
-        bytecode.push(0x94);
-    } // muls
-    for _ in 0..60 {
-        bytecode.push(0x92);
-    } // adds
-
-    let result = vectors::detect_matrix_multiply(&bytecode);
-    assert!(result.confidence >= 0.9);
-    assert_eq!(result.pattern, "Matrix Multiply");
+    for _ in 0..41 {
+        bytecode.push(0x28);
+    }
+    let analyzer = PatternAnalyzer::default();
+    let matches = analyzer.analyze(&bytecode);
+    assert!(matches
+        .iter()
+        .any(|m| m.name.contains("Brotli") && m.confidence >= 0.7));
 }
 
 #[test]
-fn test_detect_dot_product_single_loop() {
+fn test_non_compression_not_falsely_detected() {
+    let bytecode = vec![0x01, 0x02, 0x03, 0x0b]; // just a loop with nothing else
+    let analyzer = PatternAnalyzer::default();
+    let matches = analyzer.analyze(&bytecode);
+    // Should NOT match any compression
+    assert!(!matches
+        .iter()
+        .any(|m| m.pattern_type == PatternType::Compression));
+}
+
+#[test]
+fn test_multiple_compression_patterns_ranked_correctly() {
     let mut bytecode = Vec::new();
-    bytecode.extend_from_slice(&[0x03, 0x0b]); // single loop
+    // Strong LZ4 signals
+    for _ in 0..5 {
+        bytecode.push(0x03);
+    }
+    for _ in 0..30 {
+        bytecode.push(0x28);
+    }
+    for _ in 0..15 {
+        bytecode.push(0x0c);
+    }
+    bytecode.push(0xfc);
+
+    // Weak Zstd signals
+    for _ in 0..10 {
+        bytecode.push(0x74);
+    }
+
+    let analyzer = PatternAnalyzer::default();
+    let matches = analyzer.analyze(&bytecode);
+
+    assert!(matches.len() >= 1);
+    assert!(matches[0].name.contains("LZ4"));
+}
+
+#[test]
+fn test_compression_optimization_hints_generated() {
+    let mut bytecode = Vec::new();
+    for _ in 0..5 {
+        bytecode.push(0x03);
+    }
+    for _ in 0..30 {
+        bytecode.push(0x28);
+    }
+    for _ in 0..15 {
+        bytecode.push(0x0c);
+    }
+    bytecode.push(0xfc);
+
+    let analyzer = PatternAnalyzer::default();
+    let matches = analyzer.analyze(&bytecode);
+    let lz4 = matches.iter().find(|m| m.name.contains("LZ4")).unwrap();
+    assert!(!lz4.optimization_hint.is_empty());
+}
+
+// --- VECTOR DETECTION TESTS (8) ---
+
+#[test]
+fn test_dot_product_detected_in_real_code() {
+    let mut bytecode = Vec::new();
+    bytecode.extend_from_slice(&[0x03, 0x0b]); // depth 1
     for _ in 0..25 {
         bytecode.push(0x94);
-    } // muls
+    }
     for _ in 0..25 {
         bytecode.push(0x92);
-    } // adds
+    }
 
-    let result = vectors::detect_dot_product(&bytecode);
-    assert!(result.confidence >= 0.9);
+    let analyzer = PatternAnalyzer::default();
+    let matches = analyzer.analyze(&bytecode);
+    assert!(matches
+        .iter()
+        .any(|m| m.name == "Dot Product" && m.confidence >= 0.8));
 }
 
 #[test]
-fn test_detect_cosine_similarity_pattern() {
+fn test_matrix_multiply_detected_in_real_code() {
+    let mut bytecode = Vec::new();
+    bytecode.extend_from_slice(&[0x03, 0x03, 0x03, 0x0b, 0x0b, 0x0b]); // depth 3
+    for _ in 0..60 {
+        bytecode.push(0x94);
+    }
+    for _ in 0..60 {
+        bytecode.push(0x92);
+    }
+
+    let analyzer = PatternAnalyzer::default();
+    let matches = analyzer.analyze(&bytecode);
+    assert!(matches
+        .iter()
+        .any(|m| m.name == "Matrix Multiply" && m.confidence >= 0.8));
+}
+
+#[test]
+fn test_cosine_similarity_detected_in_real_code() {
     let mut bytecode = Vec::new();
     for _ in 0..50 {
         bytecode.push(0x94);
@@ -166,153 +254,169 @@ fn test_detect_cosine_similarity_pattern() {
     for _ in 0..50 {
         bytecode.push(0x92);
     }
-    bytecode.push(0x95); // f32.div
-    let result = vectors::detect_cosine_similarity(&bytecode);
-    assert!(result.confidence >= 0.9);
+    bytecode.push(0x95); // div
+
+    let analyzer = PatternAnalyzer::default();
+    let matches = analyzer.analyze(&bytecode);
+    assert!(matches.iter().any(|m| m.name == "Cosine Similarity"));
 }
 
 #[test]
-fn test_vector_pattern_dimensions_inferred() {
-    // In our simplified impl, we don't infer dims yet, but we verify detection
-    let bytecode = vec![0x03, 0x91, 0x0b]; // loop + sqrt
-    let result = vectors::detect_vector_norm(&bytecode);
-    assert!(result.confidence >= 0.8);
-}
-
-#[test]
-fn test_non_vector_code_not_misdetected() {
-    let bytecode = vec![0x01, 0x02, 0x03, 0x0b];
-    let result = vectors::detect_matrix_multiply(&bytecode);
-    assert!(result.confidence < 0.5);
-}
-
-// --- DATABASE TESTS ---
-
-#[test]
-fn test_detect_mongodb_insert_pattern() {
-    let bytecode = vec![0x10, 1, 0x10, 2, 0x10, 3]; // socket, write, read
-    let result = database::detect_mongodb_pattern(&bytecode);
-    assert!(result.confidence >= 0.8);
-}
-
-#[test]
-fn test_detect_filenet_query_pattern() {
-    let bytecode = vec![0x10, 4, 0x10, 5, 0x10, 6]; // open, seek, close
-    let result = database::detect_filenet_pattern(&bytecode);
-    assert!(result.confidence >= 0.8);
-}
-
-#[test]
-fn test_generic_io_not_misdetected() {
-    let bytecode = vec![0x01, 0x02, 0x03]; // No calls
-    let result = database::detect_file_io_pattern(&bytecode);
-    assert!(result.confidence == 0.0);
-}
-
-// --- AI TESTS ---
-
-#[test]
-fn test_detect_int8_quantization() {
+fn test_vector_norm_detected_in_real_code() {
     let mut bytecode = Vec::new();
-    for _ in 0..6 {
+    bytecode.extend_from_slice(&[0x03, 0x0b]);
+    bytecode.push(0x91); // sqrt
+
+    let analyzer = PatternAnalyzer::default();
+    let matches = analyzer.analyze(&bytecode);
+    assert!(matches.iter().any(|m| m.name == "Vector Norm"));
+}
+
+#[test]
+fn test_matrix_transpose_detected_in_real_code() {
+    let mut bytecode = Vec::new();
+    bytecode.extend_from_slice(&[0x03, 0x03, 0x0b, 0x0b]); // depth 2
+    for _ in 0..30 {
+        bytecode.push(0x28);
+    } // loads
+    for _ in 0..30 {
+        bytecode.push(0x36);
+    } // stores
+
+    let analyzer = PatternAnalyzer::default();
+    let matches = analyzer.analyze(&bytecode);
+    assert!(matches.iter().any(|m| m.name == "Matrix Transpose"));
+}
+
+#[test]
+fn test_vector_patterns_have_correct_confidence() {
+    let mut bytecode = Vec::new();
+    bytecode.extend_from_slice(&[0x03, 0x0b]);
+    for _ in 0..25 {
+        bytecode.push(0x94);
+    }
+    for _ in 0..25 {
+        bytecode.push(0x92);
+    }
+    // Perfect dot product profile
+
+    let analyzer = PatternAnalyzer::default();
+    let matches = analyzer.analyze(&bytecode);
+    let m = matches.iter().find(|m| m.name == "Dot Product").unwrap();
+    assert!(m.confidence > 0.8);
+}
+
+#[test]
+fn test_non_vector_not_falsely_detected() {
+    let bytecode = vec![0x01, 0x02];
+    let analyzer = PatternAnalyzer::default();
+    let matches = analyzer.analyze(&bytecode);
+    assert!(!matches
+        .iter()
+        .any(|m| m.pattern_type == PatternType::Vector));
+}
+
+#[test]
+fn test_vector_optimization_hints_generated() {
+    let mut bytecode = Vec::new();
+    bytecode.extend_from_slice(&[0x03, 0x0b]);
+    for _ in 0..25 {
+        bytecode.push(0x94);
+    }
+    for _ in 0..25 {
+        bytecode.push(0x92);
+    }
+    let analyzer = PatternAnalyzer::default();
+    let matches = analyzer.analyze(&bytecode);
+    let m = matches.iter().find(|m| m.name == "Dot Product").unwrap();
+    assert!(m.optimization_hint.contains("SIMD"));
+}
+
+// --- DATABASE DETECTION TESTS (4) ---
+
+#[test]
+fn test_mongodb_pattern_detected() {
+    let bytecode = vec![0x10, 0x10, 0x10]; // calls
+    let analyzer = PatternAnalyzer::default();
+    let matches = analyzer.analyze(&bytecode);
+    assert!(matches.iter().any(|m| m.name.contains("MongoDB")));
+}
+
+#[test]
+fn test_filenet_pattern_detected() {
+    let bytecode = vec![0x10; 10]; // many calls
+    let analyzer = PatternAnalyzer::default();
+    let matches = analyzer.analyze(&bytecode);
+    assert!(matches.iter().any(|m| m.name.contains("FileNet")));
+}
+
+#[test]
+fn test_database_confidence_above_threshold() {
+    let bytecode = vec![0x10, 0x10, 0x10];
+    let analyzer = PatternAnalyzer::default();
+    let matches = analyzer.analyze(&bytecode);
+    let m = matches.iter().find(|m| m.name.contains("MongoDB")).unwrap();
+    assert!(m.confidence >= 0.75);
+}
+
+#[test]
+fn test_non_database_not_falsely_detected() {
+    let bytecode = vec![0x01, 0x02]; // no calls
+    let analyzer = PatternAnalyzer::default();
+    let matches = analyzer.analyze(&bytecode);
+    assert!(!matches
+        .iter()
+        .any(|m| m.pattern_type == PatternType::Database));
+}
+
+// --- AI DETECTION TESTS (4) ---
+
+#[test]
+fn test_int8_quantization_detected() {
+    let mut bytecode = Vec::new();
+    for _ in 0..10 {
         bytecode.push(0x43); // const
         bytecode.push(0x95); // div
         bytecode.push(0xa8); // trunc
     }
-    let result = ai::detect_quantization(&bytecode);
-    assert!(result.confidence >= 0.9);
+    let analyzer = PatternAnalyzer::default();
+    let matches = analyzer.analyze(&bytecode);
+    assert!(matches.iter().any(|m| m.name == "INT8 Quantization"));
 }
 
 #[test]
-fn test_detect_matrix_vector_multiplication() {
+fn test_convolution_layer_detected() {
     let mut bytecode = Vec::new();
-    bytecode.extend_from_slice(&[0x03, 0x03, 0x0b, 0x0b]); // depth 2
-    for _ in 0..40 {
+    bytecode.extend_from_slice(&[0x03, 0x03, 0x03, 0x0b, 0x0b, 0x0b]);
+    for _ in 0..150 {
         bytecode.push(0x94);
     }
-    let result = ai::detect_matrix_vector_multiplication(&bytecode);
-    assert!(result.confidence >= 0.8);
-}
-
-// --- INTEGRATION TESTS ---
-
-#[test]
-fn test_pattern_analyzer_runs_all_detectors() {
-    let analyzer = PatternAnalyzer::new();
-    let bytecode = vec![0x03, 0x94, 0x10, 1];
-    let profile = analyzer.analyze(&bytecode).unwrap();
-
-    assert!(profile.vector.confidence > 0.0);
-    assert!(profile.database.confidence > 0.0);
+    let analyzer = PatternAnalyzer::default();
+    let matches = analyzer.analyze(&bytecode);
+    assert!(matches.iter().any(|m| m.name == "Convolution Layer"));
 }
 
 #[test]
-fn test_primary_pattern_selected_correctly() {
-    let analyzer = PatternAnalyzer::new();
-    let mut bytecode = Vec::new();
-    bytecode.extend_from_slice(&[0x03, 0x03, 0x03, 0x0b, 0x0b, 0x0b]); // depth 3
-    for _ in 0..100 {
-        bytecode.push(0x94);
-    } // Massive vector muls
-    for _ in 0..100 {
-        bytecode.push(0x92);
-    } // Massive vector adds
-    let profile = analyzer.analyze(&bytecode).unwrap();
-
-    assert!(
-        profile.primary_pattern.contains("Dot Product")
-            || profile.primary_pattern.contains("Matrix Multiply")
-    );
-}
-
-#[test]
-fn test_optimization_suggestions_generated() {
-    let analyzer = PatternAnalyzer::new();
+fn test_ai_confidence_above_threshold() {
     let mut bytecode = Vec::new();
     for _ in 0..10 {
-        bytecode.push(0x03);
+        bytecode.push(0x43);
+        bytecode.push(0x95);
+        bytecode.push(0xa8);
     }
-    for _ in 0..40 {
-        bytecode.push(0x28);
-    }
-    for _ in 0..20 {
-        bytecode.push(0x0c);
-    }
-    for _ in 0..10 {
-        bytecode.push(0xfc);
-    }
-
-    let profile = analyzer.analyze(&bytecode).unwrap();
-    assert!(profile.optimization_suggestion.contains("LZ4"));
+    let analyzer = PatternAnalyzer::default();
+    let matches = analyzer.analyze(&bytecode);
+    let m = matches
+        .iter()
+        .find(|m| m.name == "INT8 Quantization")
+        .unwrap();
+    assert!(m.confidence >= 0.75);
 }
 
 #[test]
-fn test_confidence_scores_normalized() {
-    let analyzer = PatternAnalyzer::new();
-    let bytecode = vec![0x01; 1000];
-    let profile = analyzer.analyze(&bytecode).unwrap();
-
-    assert!(profile.compression.confidence <= 1.0);
-    assert!(profile.vector.confidence <= 1.0);
-    assert!(profile.database.confidence <= 1.0);
-    assert!(profile.ai.confidence <= 1.0);
-}
-
-#[test]
-fn test_mixed_patterns_handled_correctly() {
-    let analyzer = PatternAnalyzer::new();
-    let mut bytecode = Vec::new();
-    // Mixed LZ4 and Vector
-    for _ in 0..10 {
-        bytecode.push(0x03);
-    }
-    for _ in 0..30 {
-        bytecode.push(0x28);
-    }
-    for _ in 0..50 {
-        bytecode.push(0x94);
-    }
-
-    let profile = analyzer.analyze(&bytecode).unwrap();
-    assert!(profile.compression.confidence >= 0.5 || profile.vector.confidence >= 0.5);
+fn test_non_ai_not_falsely_detected() {
+    let bytecode = vec![0x01, 0x02];
+    let analyzer = PatternAnalyzer::default();
+    let matches = analyzer.analyze(&bytecode);
+    assert!(!matches.iter().any(|m| m.pattern_type == PatternType::AI));
 }

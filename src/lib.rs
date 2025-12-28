@@ -1,3 +1,4 @@
+pub mod analyzer;
 pub mod codegen;
 pub mod executor;
 pub mod patterns;
