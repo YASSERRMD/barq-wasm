@@ -836,14 +836,32 @@ pub fn vector_elementwise_multiply(a: &[f32], b: &[f32]) -> Vec<f32> {
 // ADDITIONAL MATRIX OPERATIONS
 // ============================================================================
 
-/// Matrix transpose (n x m -> m x n)
+/// Matrix transpose (n x m -> m x n) with block tiling for cache efficiency
 #[cfg_attr(feature = "wasm", wasm_bindgen)]
 pub fn matrix_transpose(a: &[f32], rows: usize, cols: usize) -> Vec<f32> {
     let mut result = vec![0.0f32; rows * cols];
 
-    for i in 0..rows {
-        for j in 0..cols {
-            result[j * rows + i] = a[i * cols + j];
+    // Block size tuned for L1 cache
+    const BLOCK: usize = 16;
+
+    // Process in blocks for cache efficiency
+    let row_blocks = (rows + BLOCK - 1) / BLOCK;
+    let col_blocks = (cols + BLOCK - 1) / BLOCK;
+
+    for bi in 0..row_blocks {
+        let i_start = bi * BLOCK;
+        let i_end = (i_start + BLOCK).min(rows);
+
+        for bj in 0..col_blocks {
+            let j_start = bj * BLOCK;
+            let j_end = (j_start + BLOCK).min(cols);
+
+            // Transpose block
+            for i in i_start..i_end {
+                for j in j_start..j_end {
+                    result[j * rows + i] = a[i * cols + j];
+                }
+            }
         }
     }
 
@@ -980,12 +998,61 @@ pub fn relu(a: &[f32]) -> Vec<f32> {
     result
 }
 
-/// Leaky ReLU activation function
+/// Leaky ReLU activation function with 8-wide unrolling
 #[cfg_attr(feature = "wasm", wasm_bindgen)]
 pub fn leaky_relu(a: &[f32], alpha: f32) -> Vec<f32> {
-    a.iter()
-        .map(|&x| if x > 0.0 { x } else { alpha * x })
-        .collect()
+    let len = a.len();
+    let mut result = Vec::with_capacity(len);
+
+    let chunks = len / 8;
+    let mut i = 0;
+
+    while i < chunks * 8 {
+        result.push(if a[i] > 0.0 { a[i] } else { alpha * a[i] });
+        result.push(if a[i + 1] > 0.0 {
+            a[i + 1]
+        } else {
+            alpha * a[i + 1]
+        });
+        result.push(if a[i + 2] > 0.0 {
+            a[i + 2]
+        } else {
+            alpha * a[i + 2]
+        });
+        result.push(if a[i + 3] > 0.0 {
+            a[i + 3]
+        } else {
+            alpha * a[i + 3]
+        });
+        result.push(if a[i + 4] > 0.0 {
+            a[i + 4]
+        } else {
+            alpha * a[i + 4]
+        });
+        result.push(if a[i + 5] > 0.0 {
+            a[i + 5]
+        } else {
+            alpha * a[i + 5]
+        });
+        result.push(if a[i + 6] > 0.0 {
+            a[i + 6]
+        } else {
+            alpha * a[i + 6]
+        });
+        result.push(if a[i + 7] > 0.0 {
+            a[i + 7]
+        } else {
+            alpha * a[i + 7]
+        });
+        i += 8;
+    }
+
+    while i < len {
+        result.push(if a[i] > 0.0 { a[i] } else { alpha * a[i] });
+        i += 1;
+    }
+
+    result
 }
 
 // ============================================================================
@@ -1157,53 +1224,223 @@ pub fn vector_sum(a: &[f32]) -> f32 {
     sum
 }
 
-/// Find minimum value in a vector
+/// Find minimum value in a vector with 8-wide unrolling
 #[cfg_attr(feature = "wasm", wasm_bindgen)]
 pub fn vector_min(a: &[f32]) -> f32 {
-    a.iter().cloned().fold(f32::INFINITY, f32::min)
+    if a.is_empty() {
+        return f32::INFINITY;
+    }
+
+    let len = a.len();
+    let mut min0 = f32::INFINITY;
+    let mut min1 = f32::INFINITY;
+    let mut min2 = f32::INFINITY;
+    let mut min3 = f32::INFINITY;
+    let mut min4 = f32::INFINITY;
+    let mut min5 = f32::INFINITY;
+    let mut min6 = f32::INFINITY;
+    let mut min7 = f32::INFINITY;
+
+    let chunks = len / 8;
+    let mut i = 0;
+
+    while i < chunks * 8 {
+        if a[i] < min0 {
+            min0 = a[i];
+        }
+        if a[i + 1] < min1 {
+            min1 = a[i + 1];
+        }
+        if a[i + 2] < min2 {
+            min2 = a[i + 2];
+        }
+        if a[i + 3] < min3 {
+            min3 = a[i + 3];
+        }
+        if a[i + 4] < min4 {
+            min4 = a[i + 4];
+        }
+        if a[i + 5] < min5 {
+            min5 = a[i + 5];
+        }
+        if a[i + 6] < min6 {
+            min6 = a[i + 6];
+        }
+        if a[i + 7] < min7 {
+            min7 = a[i + 7];
+        }
+        i += 8;
+    }
+
+    while i < len {
+        if a[i] < min0 {
+            min0 = a[i];
+        }
+        i += 1;
+    }
+
+    // Tree reduction
+    let m01 = min0.min(min1);
+    let m23 = min2.min(min3);
+    let m45 = min4.min(min5);
+    let m67 = min6.min(min7);
+    let m0123 = m01.min(m23);
+    let m4567 = m45.min(m67);
+    m0123.min(m4567)
 }
 
-/// Find maximum value in a vector
+/// Find maximum value in a vector with 8-wide unrolling
 #[cfg_attr(feature = "wasm", wasm_bindgen)]
 pub fn vector_max(a: &[f32]) -> f32 {
-    a.iter().cloned().fold(f32::NEG_INFINITY, f32::max)
+    if a.is_empty() {
+        return f32::NEG_INFINITY;
+    }
+
+    let len = a.len();
+    let mut max0 = f32::NEG_INFINITY;
+    let mut max1 = f32::NEG_INFINITY;
+    let mut max2 = f32::NEG_INFINITY;
+    let mut max3 = f32::NEG_INFINITY;
+    let mut max4 = f32::NEG_INFINITY;
+    let mut max5 = f32::NEG_INFINITY;
+    let mut max6 = f32::NEG_INFINITY;
+    let mut max7 = f32::NEG_INFINITY;
+
+    let chunks = len / 8;
+    let mut i = 0;
+
+    while i < chunks * 8 {
+        if a[i] > max0 {
+            max0 = a[i];
+        }
+        if a[i + 1] > max1 {
+            max1 = a[i + 1];
+        }
+        if a[i + 2] > max2 {
+            max2 = a[i + 2];
+        }
+        if a[i + 3] > max3 {
+            max3 = a[i + 3];
+        }
+        if a[i + 4] > max4 {
+            max4 = a[i + 4];
+        }
+        if a[i + 5] > max5 {
+            max5 = a[i + 5];
+        }
+        if a[i + 6] > max6 {
+            max6 = a[i + 6];
+        }
+        if a[i + 7] > max7 {
+            max7 = a[i + 7];
+        }
+        i += 8;
+    }
+
+    while i < len {
+        if a[i] > max0 {
+            max0 = a[i];
+        }
+        i += 1;
+    }
+
+    // Tree reduction
+    let m01 = max0.max(max1);
+    let m23 = max2.max(max3);
+    let m45 = max4.max(max5);
+    let m67 = max6.max(max7);
+    let m0123 = m01.max(m23);
+    let m4567 = m45.max(m67);
+    m0123.max(m4567)
 }
 
-/// Argmax: index of maximum value
+/// Argmax: index of maximum value with 4-wide tracking
 #[cfg_attr(feature = "wasm", wasm_bindgen)]
 pub fn argmax(a: &[f32]) -> usize {
     if a.is_empty() {
         return 0;
     }
 
+    let len = a.len();
     let mut max_idx = 0;
     let mut max_val = a[0];
 
-    for (i, &val) in a.iter().enumerate() {
-        if val > max_val {
-            max_val = val;
+    // Process 4 at a time
+    let chunks = len / 4;
+    let mut i = 0;
+
+    while i < chunks * 4 {
+        if a[i] > max_val {
+            max_val = a[i];
             max_idx = i;
         }
+        if a[i + 1] > max_val {
+            max_val = a[i + 1];
+            max_idx = i + 1;
+        }
+        if a[i + 2] > max_val {
+            max_val = a[i + 2];
+            max_idx = i + 2;
+        }
+        if a[i + 3] > max_val {
+            max_val = a[i + 3];
+            max_idx = i + 3;
+        }
+        i += 4;
+    }
+
+    while i < len {
+        if a[i] > max_val {
+            max_val = a[i];
+            max_idx = i;
+        }
+        i += 1;
     }
 
     max_idx
 }
 
-/// Argmin: index of minimum value
+/// Argmin: index of minimum value with 4-wide tracking
 #[cfg_attr(feature = "wasm", wasm_bindgen)]
 pub fn argmin(a: &[f32]) -> usize {
     if a.is_empty() {
         return 0;
     }
 
+    let len = a.len();
     let mut min_idx = 0;
     let mut min_val = a[0];
 
-    for (i, &val) in a.iter().enumerate() {
-        if val < min_val {
-            min_val = val;
+    // Process 4 at a time
+    let chunks = len / 4;
+    let mut i = 0;
+
+    while i < chunks * 4 {
+        if a[i] < min_val {
+            min_val = a[i];
             min_idx = i;
         }
+        if a[i + 1] < min_val {
+            min_val = a[i + 1];
+            min_idx = i + 1;
+        }
+        if a[i + 2] < min_val {
+            min_val = a[i + 2];
+            min_idx = i + 2;
+        }
+        if a[i + 3] < min_val {
+            min_val = a[i + 3];
+            min_idx = i + 3;
+        }
+        i += 4;
+    }
+
+    while i < len {
+        if a[i] < min_val {
+            min_val = a[i];
+            min_idx = i;
+        }
+        i += 1;
     }
 
     min_idx
