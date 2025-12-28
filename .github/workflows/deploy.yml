@@ -27,6 +27,8 @@ jobs:
           mkdir -p public
           cp -r pkg public/
           cp -r examples public/
+          # Remove .gitignore files inside public/ so they don't interfere with deployment
+          find public -name ".gitignore" -delete
           # Create a redirect index.html at the root of the site
           echo '<!DOCTYPE html><html><head><meta http-equiv="refresh" content="0; url=examples/wasm/benchmark.html"></head></html>' > public/index.html
 
