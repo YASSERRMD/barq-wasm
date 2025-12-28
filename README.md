@@ -91,7 +91,14 @@ Tested with actual data: Shakespeare text, GloVe-style embeddings, and MNIST ima
 ### Prerequisites
 *   Rust (latest stable toolchain)
 *   Cargo
+*   wasm-pack (for building WebAssembly package)
 *   (Optional) Clang/LLVM for specific linkage requirements
+
+Install wasm-pack:
+
+```bash
+cargo install wasm-pack
+```
 
 ### Building from Source
 
@@ -114,6 +121,94 @@ To run performance benchmarks:
 ```bash
 cargo bench
 ```
+
+### Building for Web (WASM Package)
+
+Build the WebAssembly package for browser usage:
+
+```bash
+wasm-pack build --target web --features wasm
+```
+
+This generates a `pkg/` directory containing:
+*   `barq_wasm.js` - JavaScript bindings and module loader
+*   `barq_wasm_bg.wasm` - Compiled WebAssembly binary
+*   `barq_wasm.d.ts` - TypeScript type definitions
+*   `package.json` - npm package configuration
+
+### Using in HTML
+
+Include the generated package in your HTML file:
+
+```html
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Barq-WASM Example</title>
+</head>
+<body>
+    <script type="module">
+        import init, {
+            dot_product_simd,
+            matrix_multiply_tiled,
+            quantize_int8_simd,
+            conv2d_optimized,
+            cosine_similarity_simd,
+            vector_norm_simd,
+            lz4_compress_optimized
+        } from './pkg/barq_wasm.js';
+
+        async function run() {
+            // Initialize the WASM module
+            await init();
+
+            // Example: Dot product of two vectors
+            const a = new Float32Array([1.0, 2.0, 3.0, 4.0]);
+            const b = new Float32Array([5.0, 6.0, 7.0, 8.0]);
+            const result = dot_product_simd(a, b);
+            console.log('Dot product:', result);
+
+            // Example: Matrix multiplication (64x64)
+            const size = 64;
+            const matA = new Float32Array(size * size).fill(0.5);
+            const matB = new Float32Array(size * size).fill(0.5);
+            const matC = matrix_multiply_tiled(matA, matB, size);
+            console.log('Matrix result:', matC[0]);
+
+            // Example: INT8 quantization
+            const floats = new Float32Array([0.1, 0.5, -0.3, 0.9]);
+            const quantized = quantize_int8_simd(floats, 0.1);
+            console.log('Quantized:', quantized);
+        }
+
+        run();
+    </script>
+</body>
+</html>
+```
+
+### Available WASM Functions
+
+| Function | Description | Parameters |
+|:---|:---|:---|
+| `dot_product_simd(a, b)` | Compute dot product of two vectors | Float32Array, Float32Array |
+| `vector_norm_simd(a)` | Compute L2 norm of a vector | Float32Array |
+| `cosine_similarity_simd(a, b)` | Compute cosine similarity | Float32Array, Float32Array |
+| `matrix_multiply_tiled(a, b, n)` | Matrix multiplication (n x n) | Float32Array, Float32Array, number |
+| `quantize_int8_simd(input, scale)` | Quantize floats to INT8 | Float32Array, number |
+| `conv2d_optimized(input, kernel, w, h, ks)` | 2D convolution with fused ReLU | Float32Array, Float32Array, number, number, number |
+| `lz4_compress_optimized(input)` | LZ4 compression | Uint8Array |
+
+### Serving Locally
+
+To test in a browser, serve the files with a local HTTP server:
+
+```bash
+python3 -m http.server 8080
+```
+
+Then open `http://localhost:8080/your_page.html` in your browser.
 
 ## Usage
 
