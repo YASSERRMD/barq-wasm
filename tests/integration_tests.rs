@@ -275,7 +275,9 @@ fn test_convolution_optimized() {
 
     let code = ai_codegen::emit_convolution_optimized(&mut ir);
     assert!(code.is_ok());
-    assert!(ir.instructions.contains(&"tiled_convolution".to_string()));
+    assert!(ir
+        .instructions
+        .contains(&"tiled_convolution_2x2".to_string()));
     assert!(!code.unwrap().is_empty());
 }
 
