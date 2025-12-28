@@ -191,25 +191,40 @@ pub fn quantize_int8_simd(input: &[f32], scale: f32) -> Vec<i8> {
     while i < chunks * 16 {
         // Batch 1: elements 0-3
         let (q0, q1, q2, q3) = quantize_4_fast(
-            input[i], input[i+1], input[i+2], input[i+3], inv_scale
+            input[i],
+            input[i + 1],
+            input[i + 2],
+            input[i + 3],
+            inv_scale,
         );
         // Batch 2: elements 4-7
         let (q4, q5, q6, q7) = quantize_4_fast(
-            input[i+4], input[i+5], input[i+6], input[i+7], inv_scale
+            input[i + 4],
+            input[i + 5],
+            input[i + 6],
+            input[i + 7],
+            inv_scale,
         );
         // Batch 3: elements 8-11
         let (q8, q9, q10, q11) = quantize_4_fast(
-            input[i+8], input[i+9], input[i+10], input[i+11], inv_scale
+            input[i + 8],
+            input[i + 9],
+            input[i + 10],
+            input[i + 11],
+            inv_scale,
         );
         // Batch 4: elements 12-15
         let (q12, q13, q14, q15) = quantize_4_fast(
-            input[i+12], input[i+13], input[i+14], input[i+15], inv_scale
+            input[i + 12],
+            input[i + 13],
+            input[i + 14],
+            input[i + 15],
+            inv_scale,
         );
 
         // Push all 16 at once (better than individual pushes)
         output.extend_from_slice(&[
-            q0, q1, q2, q3, q4, q5, q6, q7,
-            q8, q9, q10, q11, q12, q13, q14, q15
+            q0, q1, q2, q3, q4, q5, q6, q7, q8, q9, q10, q11, q12, q13, q14, q15,
         ]);
 
         i += 16;
@@ -218,7 +233,11 @@ pub fn quantize_int8_simd(input: &[f32], scale: f32) -> Vec<i8> {
     // Remainder: process 4 at a time
     while i + 4 <= len {
         let (q0, q1, q2, q3) = quantize_4_fast(
-            input[i], input[i+1], input[i+2], input[i+3], inv_scale
+            input[i],
+            input[i + 1],
+            input[i + 2],
+            input[i + 3],
+            inv_scale,
         );
         output.extend_from_slice(&[q0, q1, q2, q3]);
         i += 4;
@@ -245,10 +264,26 @@ fn quantize_4_fast(v0: f32, v1: f32, v2: f32, v3: f32, inv_scale: f32) -> (i8, i
 
     // Round to nearest (using faster integer conversion)
     // Adding 0.5 and truncating is faster than .round() in WASM
-    let r0 = if s0 >= 0.0 { (s0 + 0.5) as i32 } else { (s0 - 0.5) as i32 };
-    let r1 = if s1 >= 0.0 { (s1 + 0.5) as i32 } else { (s1 - 0.5) as i32 };
-    let r2 = if s2 >= 0.0 { (s2 + 0.5) as i32 } else { (s2 - 0.5) as i32 };
-    let r3 = if s3 >= 0.0 { (s3 + 0.5) as i32 } else { (s3 - 0.5) as i32 };
+    let r0 = if s0 >= 0.0 {
+        (s0 + 0.5) as i32
+    } else {
+        (s0 - 0.5) as i32
+    };
+    let r1 = if s1 >= 0.0 {
+        (s1 + 0.5) as i32
+    } else {
+        (s1 - 0.5) as i32
+    };
+    let r2 = if s2 >= 0.0 {
+        (s2 + 0.5) as i32
+    } else {
+        (s2 - 0.5) as i32
+    };
+    let r3 = if s3 >= 0.0 {
+        (s3 + 0.5) as i32
+    } else {
+        (s3 - 0.5) as i32
+    };
 
     // Clamp using integer ops (faster than float compare)
     let c0 = r0.max(-128).min(127) as i8;
@@ -263,7 +298,11 @@ fn quantize_4_fast(v0: f32, v1: f32, v2: f32, v3: f32, inv_scale: f32) -> (i8, i
 #[inline(always)]
 fn quantize_single_fast(v: f32, inv_scale: f32) -> i8 {
     let s = v * inv_scale;
-    let r = if s >= 0.0 { (s + 0.5) as i32 } else { (s - 0.5) as i32 };
+    let r = if s >= 0.0 {
+        (s + 0.5) as i32
+    } else {
+        (s - 0.5) as i32
+    };
     r.max(-128).min(127) as i8
 }
 
@@ -429,8 +468,7 @@ fn lz4_accelerated(input: &[u8]) -> Vec<u8> {
                 // Extend match forward
                 let mut match_len: usize = 4;
                 let max_match = (len - pos).min(65535);
-                while match_len < max_match
-                    && input[ref_pos + match_len] == input[pos + match_len]
+                while match_len < max_match && input[ref_pos + match_len] == input[pos + match_len]
                 {
                     match_len += 1;
                 }
@@ -548,8 +586,8 @@ pub fn conv2d_optimized(
                         // Generic kernel
                         for ky in 0..kernel_size {
                             for kx in 0..kernel_size {
-                                sum +=
-                                    input[(y + ky) * width + (x + kx)] * kernel[ky * kernel_size + kx];
+                                sum += input[(y + ky) * width + (x + kx)]
+                                    * kernel[ky * kernel_size + kx];
                             }
                         }
                     }

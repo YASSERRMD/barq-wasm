@@ -148,9 +148,9 @@ impl VectorAccelerator {
         // 2. prefetcht0 (prefetch data to L1)
         // 3. vfmadd231ps (compute)
         Ok(vec![
-            0xC5, 0xFC, 0x28,       // vmovaps
-            0x0F, 0x18, 0x01,       // prefetcht0
-            0xC4, 0xE2, 0x79, 0x18  // vfmadd231ps
+            0xC5, 0xFC, 0x28, // vmovaps
+            0x0F, 0x18, 0x01, // prefetcht0
+            0xC4, 0xE2, 0x79, 0x18, // vfmadd231ps
         ])
     }
 
