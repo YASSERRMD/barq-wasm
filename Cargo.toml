@@ -30,3 +30,7 @@ pretty_assertions = "1.0"
 [[bench]]
 name = "compression_bench"
 harness = false
+
+[[bench]]
+name = "vector_bench"
+harness = false
