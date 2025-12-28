@@ -1,4 +1,9 @@
-# Barq-WASM
+<div align="center">
+  <img src="assets/logo.svg" alt="Barq-WASM Logo" width="200" height="200">
+  <h1>Barq-WASM</h1>
+  <p><strong>Pattern-aware WebAssembly Runtime for High-Performance Specialized Workloads</strong></p>
+</div>
+
 
 Pattern-aware WebAssembly Runtime for high-performance specialized workloads.
 
