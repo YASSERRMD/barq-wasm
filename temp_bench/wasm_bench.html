@@ -1,0 +1,420 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Barq-WASM Performance Benchmark v2</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Segoe UI', system-ui, sans-serif;
+            max-width: 1000px;
+            margin: 0 auto;
+            padding: 20px;
+            background: linear-gradient(135deg, #0d1117 0%, #161b22 100%);
+            color: #c9d1d9;
+            min-height: 100vh;
+        }
+
+        h1 {
+            text-align: center;
+            color: #58a6ff;
+            margin-bottom: 10px;
+            font-size: 28px;
+        }
+
+        .subtitle {
+            text-align: center;
+            color: #8b949e;
+            margin-bottom: 30px;
+            font-size: 14px;
+        }
+
+        .benchmark-group {
+            background: rgba(22, 27, 34, 0.8);
+            border: 1px solid #30363d;
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 20px;
+            backdrop-filter: blur(10px);
+        }
+
+        .benchmark-group h2 {
+            margin: 0 0 15px 0;
+            color: #58a6ff;
+            font-size: 16px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .benchmark-group h2::before {
+            content: '';
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            background: #3fb950;
+            border-radius: 50%;
+        }
+
+        .result-row {
+            display: grid;
+            grid-template-columns: 1fr auto auto auto;
+            gap: 15px;
+            align-items: center;
+            padding: 12px 0;
+            border-bottom: 1px solid #21262d;
+        }
+
+        .result-row:last-child {
+            border-bottom: none;
+        }
+
+        .label {
+            color: #c9d1d9;
+            font-size: 14px;
+        }
+
+        .label small {
+            color: #8b949e;
+            display: block;
+            font-size: 11px;
+        }
+
+        .time {
+            font-weight: 600;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 14px;
+            padding: 4px 10px;
+            border-radius: 6px;
+        }
+
+        .time.wasm {
+            color: #3fb950;
+            background: rgba(63, 185, 80, 0.1);
+        }
+
+        .time.js {
+            color: #f85149;
+            background: rgba(248, 81, 73, 0.1);
+        }
+
+        .speedup {
+            background: linear-gradient(135deg, #238636 0%, #2ea043 100%);
+            color: white;
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+            min-width: 80px;
+            text-align: center;
+        }
+
+        .speedup.slow {
+            background: linear-gradient(135deg, #da3633 0%, #f85149 100%);
+        }
+
+        #status {
+            text-align: center;
+            padding: 30px;
+            font-size: 16px;
+            color: #58a6ff;
+        }
+
+        .loading {
+            animation: pulse 1.5s infinite ease-in-out;
+        }
+
+        @keyframes pulse {
+
+            0%,
+            100% {
+                opacity: 1;
+            }
+
+            50% {
+                opacity: 0.5;
+            }
+        }
+
+        .summary-box {
+            background: linear-gradient(135deg, #1f6feb 0%, #388bfd 100%);
+            color: white;
+            padding: 20px;
+            border-radius: 12px;
+            text-align: center;
+            margin-top: 20px;
+        }
+
+        .summary-box h3 {
+            margin: 0 0 10px 0;
+            font-size: 18px;
+        }
+
+        .summary-stats {
+            display: flex;
+            justify-content: center;
+            gap: 30px;
+        }
+
+        .stat {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .stat-value {
+            font-size: 24px;
+            font-weight: bold;
+        }
+
+        .stat-label {
+            font-size: 12px;
+            opacity: 0.8;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>🚀 Barq-WASM Performance Benchmark v2</h1>
+    <p class="subtitle">Real WASM optimizations: 8-wide unrolling, cache tiling, fused operations</p>
+    <div id="status" class="loading">Loading WASM module...</div>
+    <div id="results"></div>
+
+    <script type="module">
+        import init, { 
+            dot_product_simd, dot_product_scalar,
+            matrix_multiply_tiled, matrix_multiply_scalar,
+            quantize_int8_simd, quantize_int8_scalar,
+            lz4_compress_optimized, lz4_compress_scalar,
+            conv2d_optimized, conv2d_scalar,
+            vector_norm_simd, vector_norm_scalar,
+            cosine_similarity_simd, cosine_similarity_scalar
+        } from '../pkg/barq_wasm.js';
+
+        let speedups = [];
+
+        function setStatus(msg, loading = true) {
+            const el = document.getElementById('status');
+            el.textContent = msg;
+            el.className = loading ? 'loading' : '';
+        }
+
+        function addResult(group, label, details, wasmTime, jsTime) {
+            const speedup = jsTime / wasmTime;
+            speedups.push(speedup);
+            const speedupClass = speedup >= 1 ? '' : ' slow';
+            const html = `
+                <div class="result-row">
+                    <span class="label">${label}<small>${details}</small></span>
+                    <span class="time wasm">${wasmTime.toFixed(3)} ms</span>
+                    <span class="time js">${jsTime.toFixed(3)} ms</span>
+                    <span class="speedup${speedupClass}">${speedup.toFixed(2)}x</span>
+                </div>
+            `;
+            document.getElementById(group).innerHTML += html;
+        }
+
+        function createGroup(id, title) {
+            const html = `
+                <div class="benchmark-group">
+                    <h2>${title}</h2>
+                    <div id="${id}"></div>
+                </div>
+            `;
+            document.getElementById('results').innerHTML += html;
+        }
+
+        // --- JS Baseline Implementations ---
+        function jsDotProduct(a, b) {
+            let sum = 0;
+            for (let i = 0; i < a.length; i++) {
+                sum += a[i] * b[i];
+            }
+            return sum;
+        }
+
+        function jsMatrixMul(a, b, n) {
+            const c = new Float32Array(n * n);
+            for (let i = 0; i < n; i++) {
+                for (let j = 0; j < n; j++) {
+                    let sum = 0;
+                    for (let k = 0; k < n; k++) {
+                        sum += a[i * n + k] * b[k * n + j];
+                    }
+                    c[i * n + j] = sum;
+                }
+            }
+            return c;
+        }
+
+        function jsQuantizeInt8(input, scale) {
+            const output = new Int8Array(input.length);
+            const invScale = 1.0 / scale;
+            for (let i = 0; i < input.length; i++) {
+                let val = Math.round(input[i] * invScale);
+                output[i] = Math.max(-128, Math.min(127, val));
+            }
+            return output;
+        }
+
+        function jsLz4Compress(input) {
+            return new Uint8Array(input);
+        }
+
+        function jsConv2d(input, kernel, width, height, kernelSize) {
+            const outW = width - kernelSize + 1;
+            const outH = height - kernelSize + 1;
+            const output = new Float32Array(outW * outH);
+            for (let y = 0; y < outH; y++) {
+                for (let x = 0; x < outW; x++) {
+                    let sum = 0;
+                    for (let ky = 0; ky < kernelSize; ky++) {
+                        for (let kx = 0; kx < kernelSize; kx++) {
+                            sum += input[(y + ky) * width + (x + kx)] * kernel[ky * kernelSize + kx];
+                        }
+                    }
+                    output[y * outW + x] = sum;
+                }
+            }
+            return output;
+        }
+
+        function jsVectorNorm(a) {
+            let sum = 0;
+            for (let i = 0; i < a.length; i++) {
+                sum += a[i] * a[i];
+            }
+            return Math.sqrt(sum);
+        }
+
+        function jsCosineSim(a, b) {
+            const dot = jsDotProduct(a, b);
+            const normA = jsVectorNorm(a);
+            const normB = jsVectorNorm(b);
+            return dot / (normA * normB);
+        }
+
+        // --- Benchmark Runner ---
+        function benchmark(fn, iterations = 100) {
+            // Warmup (critical for JIT)
+            for (let i = 0; i < 10; i++) fn();
+            
+            const start = performance.now();
+            for (let i = 0; i < iterations; i++) {
+                fn();
+            }
+            return (performance.now() - start) / iterations;
+        }
+
+        async function runBenchmarks() {
+            await init();
+            setStatus('Running benchmarks...', true);
+
+            // Create result containers
+            createGroup('vector-results', 'Vector Operations (8-wide unrolling)');
+            createGroup('matrix-results', 'Matrix Operations (L1/L2 cache tiling)');
+            createGroup('ai-results', 'AI / Quantization (SIMD-style + fused ops)');
+            createGroup('compression-results', 'Compression (Adaptive algorithm)');
+
+            // --- Vector: Dot Product (LARGE) ---
+            const vecSizeLarge = 500000;
+            const aLarge = new Float32Array(vecSizeLarge).fill(1.5);
+            const bLarge = new Float32Array(vecSizeLarge).fill(2.0);
+
+            let wasmDot = benchmark(() => dot_product_simd(aLarge, bLarge), 200);
+            let jsDot = benchmark(() => jsDotProduct(aLarge, bLarge), 200);
+            addResult('vector-results', 'Dot Product', `${(vecSizeLarge/1000).toFixed(0)}K elements`, wasmDot, jsDot);
+
+            // --- Vector: Norm ---
+            let wasmNorm = benchmark(() => vector_norm_simd(aLarge), 200);
+            let jsNorm = benchmark(() => jsVectorNorm(aLarge), 200);
+            addResult('vector-results', 'L2 Norm', `${(vecSizeLarge/1000).toFixed(0)}K elements`, wasmNorm, jsNorm);
+
+            // --- Vector: Cosine Similarity ---
+            const cosVec = 100000;
+            const cosA = new Float32Array(cosVec).map(() => Math.random());
+            const cosB = new Float32Array(cosVec).map(() => Math.random());
+            let wasmCos = benchmark(() => cosine_similarity_simd(cosA, cosB), 100);
+            let jsCos = benchmark(() => jsCosineSim(cosA, cosB), 100);
+            addResult('vector-results', 'Cosine Similarity', `${(cosVec/1000).toFixed(0)}K elements`, wasmCos, jsCos);
+
+            // --- Matrix Multiply (various sizes) ---
+            for (const matSize of [64, 128]) {
+                const matA = new Float32Array(matSize * matSize).fill(1.0);
+                const matB = new Float32Array(matSize * matSize).fill(2.0);
+
+                let wasmMat = benchmark(() => matrix_multiply_tiled(matA, matB, matSize), matSize > 100 ? 10 : 30);
+                let jsMat = benchmark(() => jsMatrixMul(matA, matB, matSize), matSize > 100 ? 10 : 30);
+                addResult('matrix-results', `Matrix Mul`, `${matSize}×${matSize}`, wasmMat, jsMat);
+            }
+
+            // --- INT8 Quantization (LARGE) ---
+            const quantSize = 500000;
+            const floatData = new Float32Array(quantSize).map(() => Math.random() * 2 - 1);
+
+            let wasmQuant = benchmark(() => quantize_int8_simd(floatData, 0.1), 100);
+            let jsQuant = benchmark(() => jsQuantizeInt8(floatData, 0.1), 100);
+            addResult('ai-results', 'INT8 Quantization', `${(quantSize/1000).toFixed(0)}K elements`, wasmQuant, jsQuant);
+
+            // --- Convolution (medium) ---
+            const convW = 256, convH = 256, kernelSize = 3;
+            const convInput = new Float32Array(convW * convH).fill(0.5);
+            const kernel = new Float32Array(kernelSize * kernelSize).fill(0.1);
+
+            let wasmConv = benchmark(() => conv2d_optimized(convInput, kernel, convW, convH, kernelSize), 50);
+            let jsConv = benchmark(() => jsConv2d(convInput, kernel, convW, convH, kernelSize), 50);
+            addResult('ai-results', 'Conv2D + ReLU', `${convW}×${convH}, 3×3 kernel`, wasmConv, jsConv);
+
+            // --- LZ4 Compression (medium buffer) ---
+            const compressSize = 100000;
+            const compressData = new Uint8Array(compressSize);
+            // Create compressible data
+            for (let i = 0; i < compressSize; i++) {
+                compressData[i] = (i % 256);
+            }
+
+            let wasmLz4 = benchmark(() => lz4_compress_optimized(compressData), 50);
+            let jsLz4 = benchmark(() => jsLz4Compress(compressData), 50);
+            addResult('compression-results', 'LZ4 Compression', `${(compressSize/1024).toFixed(1)}KB`, wasmLz4, jsLz4);
+
+            // Summary
+            const avgSpeedup = speedups.reduce((a, b) => a + b, 0) / speedups.length;
+            const maxSpeedup = Math.max(...speedups);
+            const minSpeedup = Math.min(...speedups);
+
+            document.getElementById('results').innerHTML += `
+                <div class="summary-box">
+                    <h3>📊 Performance Summary</h3>
+                    <div class="summary-stats">
+                        <div class="stat">
+                            <span class="stat-value">${avgSpeedup.toFixed(2)}x</span>
+                            <span class="stat-label">Average Speedup</span>
+                        </div>
+                        <div class="stat">
+                            <span class="stat-value">${maxSpeedup.toFixed(2)}x</span>
+                            <span class="stat-label">Best Speedup</span>
+                        </div>
+                        <div class="stat">
+                            <span class="stat-value">${speedups.filter(s => s >= 2).length}/${speedups.length}</span>
+                            <span class="stat-label">Tests ≥2x faster</span>
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            setStatus('✅ Benchmarks Complete!', false);
+        }
+
+        runBenchmarks().catch(err => {
+            setStatus('❌ Error: ' + err.message, false);
+            console.error(err);
+        });
+    </script>
+</body>
+
+</html>
