@@ -117,5 +117,6 @@ A complete benchmark suite is available in the `examples/wasm` directory. To run
 
 ## GitHub Pages
 
-The benchmarks are automatically published to GitHub Pages upon every push to the `main` branch. You can view the live performance metrics at:
-`https://<username>.github.io/barq-wasm/benchmark.html`
+The benchmarks are automatically published to GitHub Pages
+ upon every push to the `main` branch. You can view the live performance metrics at:
+[https://YASSERRMD.github.io/barq-wasm/](https://YASSERRMD.github.io/barq-wasm/)
