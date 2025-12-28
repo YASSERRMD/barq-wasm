@@ -5,14 +5,20 @@ use anyhow::Result;
 pub fn emit_mongodb_optimized(ir: &mut CraneliftIR) -> Result<Vec<u8>> {
     // 1. Connection pooling
     enable_connection_pooling(ir)?;
-    // 2. Direct pwrite64
-    use_direct_pwrite64(ir)?;
-    // 3. Batching
+    // 2. Direct pwrite64 with Scatter/Gather
+    use_direct_pwrite64_scatter_gather(ir)?;
+    // 3. Batching & Zero-Copy
     batch_operations(ir)?;
+    enable_zero_copy_serialization(ir)?;
 
     // Simulate emitting optimized opcodes for MongoDB protocol
     // E.g., optimized BSON serialization
     Ok(vec![0xDB, 0x01, 0x50, 0x00, 0x11])
+}
+
+fn enable_zero_copy_serialization(ir: &mut CraneliftIR) -> Result<()> {
+    ir.instructions.push("zero_copy_bson".to_string());
+    Ok(())
 }
 
 fn enable_connection_pooling(ir: &mut CraneliftIR) -> Result<()> {
@@ -20,8 +26,10 @@ fn enable_connection_pooling(ir: &mut CraneliftIR) -> Result<()> {
     Ok(())
 }
 
-fn use_direct_pwrite64(ir: &mut CraneliftIR) -> Result<()> {
+fn use_direct_pwrite64_scatter_gather(ir: &mut CraneliftIR) -> Result<()> {
     ir.instructions.push("use_sys_pwrite64".to_string());
+    ir.instructions
+        .push("sys_writev_scatter_gather".to_string());
     Ok(())
 }
 
