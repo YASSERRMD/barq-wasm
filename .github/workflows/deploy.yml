@@ -1,0 +1,37 @@
+name: Deploy Benchmarks
+
+on:
+  push:
+    branches: [ main ]
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install wasm-pack
+        run: curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
+
+      - name: Build WASM
+        run: wasm-pack build --target web --features wasm --no-default-features
+
+      - name: Prepare Deployment
+        run: |
+          mkdir -p public
+          cp -r pkg public/
+          cp -r examples public/
+          # Create a redirect index.html at the root of the site
+          echo '<!DOCTYPE html><html><head><meta http-equiv="refresh" content="0; url=examples/wasm/benchmark.html"></head></html>' > public/index.html
+
+      - name: Deploy to GitHub Pages
+        uses: peaceiris/actions-gh-pages@v3
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./public
