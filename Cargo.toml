@@ -34,3 +34,11 @@ harness = false
 [[bench]]
 name = "vector_bench"
 harness = false
+
+[[bench]]
+name = "database_bench"
+harness = false
+
+[[bench]]
+name = "ai_bench"
+harness = false
