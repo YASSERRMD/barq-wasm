@@ -1,4 +1,6 @@
 pub mod error;
+#[cfg(feature = "analyzer")]
+pub mod analyzer;
 pub mod kernels;
 #[cfg(feature = "native-runtime")]
 pub mod runtime;
