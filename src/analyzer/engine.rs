@@ -259,8 +259,13 @@ pub fn analyze_body(operators: &[Operator]) -> BodyFacts {
                     value: v,
                 }));
             }
-            Operator::F32Neg | Operator::F64Neg | Operator::F32Abs | Operator::F64Abs
-            | Operator::F32Sqrt | Operator::F64Sqrt | Operator::F32Nearest => {
+            Operator::F32Neg
+            | Operator::F64Neg
+            | Operator::F32Abs
+            | Operator::F64Abs
+            | Operator::F32Sqrt
+            | Operator::F64Sqrt
+            | Operator::F32Nearest => {
                 let v = pop(&mut stack);
                 stack.push(Rc::new(Expr::Convert {
                     op: ConvertOp::Other,

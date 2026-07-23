@@ -96,8 +96,7 @@ fn accumulator_with_mul(lp: &LoopFacts) -> Option<(u32, MulOfLoads)> {
             rhs,
         } = &*set.value
         {
-            let reads_self =
-                lhs.locals().contains(&set.local) || rhs.locals().contains(&set.local);
+            let reads_self = lhs.locals().contains(&set.local) || rhs.locals().contains(&set.local);
             if !reads_self {
                 continue;
             }
@@ -156,10 +155,7 @@ pub fn detect_dot_product(lp: &LoopFacts, loop_index: usize) -> Option<PatternCa
     }
     evidence.push(PatternEvidence {
         feature: "two_independent_linear_loads",
-        detail: format!(
-            "load bases {:?} vs {:?}",
-            mul.bases_a, mul.bases_b
-        ),
+        detail: format!("load bases {:?} vs {:?}", mul.bases_a, mul.bases_b),
     });
 
     if lp.innermost {

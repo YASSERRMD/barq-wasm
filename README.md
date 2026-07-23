@@ -84,6 +84,23 @@ elementwise ops.
   NaN/infinity/ties, repeated-invocation stability, and 500k-element
   transfers.
 
+**Structural WASM pattern analysis** (`src/analyzer`): parses real modules
+with `wasmparser` and symbolically executes each function body into loop
+facts (load/store address expressions, accumulators, induction variables).
+
+- Detects dot-product, matrix-multiply, and quantization candidates from
+  mandatory structural evidence — e.g. a dot product requires a
+  multiply-accumulate reduction over two loads with distinct base pointers;
+  sum-of-squares and elementwise loops are structurally rejected.
+- Confidence is satisfied-requirements/total and every candidate carries its
+  evidence list (`barq-wasm analyze module.wasm` prints them). Tests assert
+  it is never a constant.
+- Verified on a labeled WAT corpus (indexed, pointer-bump, and noisy shapes;
+  near-misses; unrelated code) with precision and recall asserted at 1.0;
+  fabricated non-WASM byte arrays are rejected with typed errors.
+- Detection only: nothing is substituted or accelerated by the analyzer
+  (that is Phase 6, with differential safety tests).
+
 **Scalar compute kernels** (`src/wasm_bindings.rs`), exposed to JavaScript via
 `wasm-bindgen` and usable natively:
 
@@ -109,7 +126,6 @@ These are planned phases, not features:
 
 | Planned capability | Phase |
 |---|---|
-| Structural WASM pattern analysis (parsed modules, evidence-based confidence) | 5 |
 | Safe specialization (host-kernel imports, narrowly-scoped Cranelift JIT) | 6 |
 | Reproducible benchmarks with recorded environment and correctness gates | 7 |
 

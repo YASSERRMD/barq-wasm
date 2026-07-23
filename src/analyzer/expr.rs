@@ -17,10 +17,7 @@ pub enum Expr {
     /// Value of a local at read time.
     Local(u32),
     /// A load from linear memory at the given address expression.
-    Load {
-        addr: Rc<Expr>,
-        kind: LoadKind,
-    },
+    Load { addr: Rc<Expr>, kind: LoadKind },
     /// Binary arithmetic.
     Bin {
         op: BinOp,
@@ -28,15 +25,9 @@ pub enum Expr {
         rhs: Rc<Expr>,
     },
     /// Numeric conversion (e.g. i32.trunc_sat_f32_s).
-    Convert {
-        op: ConvertOp,
-        value: Rc<Expr>,
-    },
+    Convert { op: ConvertOp, value: Rc<Expr> },
     /// select(cond, a, b) or min/max-like constructs.
-    Select {
-        a: Rc<Expr>,
-        b: Rc<Expr>,
-    },
+    Select { a: Rc<Expr>, b: Rc<Expr> },
     /// Anything the interpreter does not model.
     Unknown,
 }
