@@ -1,7 +1,7 @@
 //! Typed errors for Barq-WASM.
 //!
 //! Unfinished or unavailable functionality must surface one of these variants
-//! instead of panicking (`todo!()`) or silently returning success.
+//! instead of panicking or silently returning success.
 
 use thiserror::Error;
 
