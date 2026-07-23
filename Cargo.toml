@@ -2,6 +2,7 @@
 name = "barq-wasm"
 version = "0.1.0"
 edition = "2021"
+default-run = "barq-wasm"
 
 [lib]
 crate-type = ["cdylib", "rlib"]
@@ -17,11 +18,12 @@ path = "src/bin/wasm_inspect.rs"
 required-features = ["inspect"]
 
 [features]
-default = ["native-runtime", "cli"]
+default = ["native-runtime", "cli", "analyzer"]
 native-runtime = ["dep:wasmtime", "dep:wasmtime-wasi"]
 cli = ["native-runtime", "dep:clap"]
 browser = ["dep:wasm-bindgen", "getrandom/js"]
 inspect = ["dep:wasmparser"]
+analyzer = ["dep:wasmparser"]
 # Deprecated alias for `browser`, kept until external build scripts migrate.
 wasm = ["browser"]
 

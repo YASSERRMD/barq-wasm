@@ -1,6 +1,6 @@
 {
   "$comment": "Machine-readable capability status. Every advertised capability must appear here. 'implemented' requires implementation + correctness tests + verification; anything less is 'partial' or 'absent'. Checked in CI.",
-  "updated_for_phase": 4,
+  "updated_for_phase": 5,
   "capabilities": [
     {
       "capability": "native WebAssembly module execution (validate/load/instantiate/invoke)",
@@ -93,11 +93,22 @@
     },
     {
       "capability": "structural WASM pattern analysis",
-      "status": "absent",
-      "implementation_files": [],
-      "correctness_tests": [],
+      "status": "implemented",
+      "implementation_files": [
+        "src/analyzer/mod.rs",
+        "src/analyzer/engine.rs",
+        "src/analyzer/patterns.rs",
+        "src/analyzer/expr.rs"
+      ],
+      "correctness_tests": [
+        "tests/analyzer_tests.rs (labeled WAT corpus: precision=1.0 and recall=1.0 asserted; near-misses rejected; fabricated byte arrays refused)"
+      ],
       "benchmarks": [],
-      "verification": []
+      "verification": [
+        "wasmparser-based parsing of imports/exports/code; symbolic execution reconstructs load/store address expressions, accumulators, and induction variables",
+        "Candidates require mandatory structural evidence (e.g. multiply-accumulate over two distinct base pointers); confidence = satisfied requirements / total, verified in tests to never be a constant"
+      ],
+      "notes": "Detects dot product, matrix multiply, and quantization candidates. Detection only \u2014 no execution substitution until Phase 6."
     },
     {
       "capability": "pattern-based specialization / JIT",

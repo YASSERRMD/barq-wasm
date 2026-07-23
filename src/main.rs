@@ -79,6 +79,11 @@ fn cli() -> Command {
                 .arg(module_arg.clone()),
         )
         .subcommand(
+            Command::new("analyze")
+                .about("Structural pattern analysis with per-candidate evidence")
+                .arg(module_arg.clone()),
+        )
+        .subcommand(
             Command::new("run")
                 .about("Instantiate a module and invoke an export")
                 .arg(module_arg.clone())
@@ -126,6 +131,36 @@ fn real_main() -> Result<(), String> {
             println!("exports:");
             for e in &info.exports {
                 println!("  {} ({})", e.name, e.kind);
+            }
+            Ok(())
+        }
+        Some(("analyze", sub)) => {
+            let bytes = read_module(sub)?;
+            // The analyzer needs binary wasm; convert .wat via the runtime's
+            // loader path first when necessary.
+            let bytes = if bytes.starts_with(b"\0asm") {
+                bytes
+            } else {
+                return Err("analyze requires a binary .wasm module".to_string());
+            };
+            let analysis = barq_wasm::analyzer::analyze_module(&bytes).map_err(stringify)?;
+            let mut any = false;
+            for (func, candidate) in analysis.candidates() {
+                any = true;
+                let name = func
+                    .export_name
+                    .clone()
+                    .unwrap_or_else(|| format!("func[{}]", func.function_index));
+                println!(
+                    "{name}: {} (confidence {:.2})",
+                    candidate.pattern, candidate.confidence
+                );
+                for e in &candidate.evidence {
+                    println!("  evidence: {} — {}", e.feature, e.detail);
+                }
+            }
+            if !any {
+                println!("no pattern candidates detected");
             }
             Ok(())
         }
