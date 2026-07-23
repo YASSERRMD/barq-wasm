@@ -1,25 +1,25 @@
-//! Barq-WASM High-Performance Browser Bindings
+//! Barq-WASM browser bindings: scalar compute kernels.
 //!
-//! This module exposes SIMD-accelerated functions to JavaScript via wasm-bindgen.
-//! Implements the optimizations from the Performance Engineering Guide:
-//! - PRIORITY 1: SIMD Code Generation (8-wide unrolling)
-//! - PRIORITY 2: Buffer Size Optimization (fast paths)
-//! - PRIORITY 3: Cache-Aware Algorithms (tiling)
-//! - PRIORITY 4: Instruction-Level Optimization (loop unrolling)
-//! - PRIORITY 5: Memory Access Patterns (sequential access)
+//! This module exposes compute functions to JavaScript via wasm-bindgen.
+//! Every function here is a **scalar** implementation. Some are manually
+//! unrolled with multiple accumulators for instruction-level parallelism,
+//! and some use cache tiling — but none executes explicit SIMD instructions
+//! (`v128`, AVX, NEON), and no auto-vectorization claim is made because none
+//! has been verified by disassembly. Explicit SIMD kernels are separate,
+//! later work and will be named and verified as such.
 
 #[cfg(feature = "wasm")]
 use wasm_bindgen::prelude::*;
 
 // ============================================================================
-// PRIORITY 1: ULTRA-FAST DOT PRODUCT (16-wide + unsafe ptr access)
+// DOT PRODUCT (16-wide unrolled scalar)
 // ============================================================================
 
-/// Ultra-fast dot product with 16-wide unrolling and unsafe pointer access
-/// Uses 16 independent accumulators to saturate CPU execution ports
-/// Target: 3-4x faster than naive scalar
+/// Dot product with 16-wide manual unrolling and unsafe pointer access.
+/// Uses 16 independent scalar accumulators for instruction-level parallelism.
+/// This is NOT a SIMD implementation.
 #[cfg_attr(feature = "wasm", wasm_bindgen)]
-pub fn dot_product_simd(a: &[f32], b: &[f32]) -> f32 {
+pub fn dot_product_unrolled_scalar(a: &[f32], b: &[f32]) -> f32 {
     let len = a.len().min(b.len());
 
     // 16 independent accumulators for maximum ILP
@@ -92,12 +92,11 @@ pub fn dot_product_scalar(a: &[f32], b: &[f32]) -> f32 {
 }
 
 // ============================================================================
-// PRIORITY 3: CACHE-AWARE MATRIX MULTIPLICATION (L1/L2 Tiling)
+// CACHE-AWARE MATRIX MULTIPLICATION (L1/L2 tiling, scalar)
 // ============================================================================
 
-/// High-performance matrix multiplication with multi-level cache tiling
-/// Uses 32x32 tiles (fits in L1), processes in k-i-j order for row-major optimization
-/// Target: 6-8x faster than naive O(n³)
+/// Matrix multiplication with multi-level cache tiling (scalar arithmetic).
+/// Uses 32x32 tiles, processed in k-i-j order for row-major access.
 #[cfg_attr(feature = "wasm", wasm_bindgen)]
 pub fn matrix_multiply_tiled(a: &[f32], b: &[f32], n: usize) -> Vec<f32> {
     let mut c = vec![0.0f32; n * n];
@@ -170,21 +169,21 @@ pub fn matrix_multiply_scalar(a: &[f32], b: &[f32], n: usize) -> Vec<f32> {
 }
 
 // ============================================================================
-// PRIORITY 1: NATIVE WASM SIMD INT8 QUANTIZATION
+// INT8 QUANTIZATION (unrolled scalar)
 // ============================================================================
 
-/// Native WASM SIMD INT8 quantization using v128 instructions
-/// Processes 4 floats at a time using f32x4 SIMD operations
-/// Target: 0.5-0.8ms (3x faster than scalar)
+/// INT8 quantization, manually unrolled to process 16 elements per iteration.
+/// This is a scalar implementation: it does NOT use `v128`/`f32x4`
+/// instructions or any other explicit SIMD.
 #[cfg_attr(feature = "wasm", wasm_bindgen)]
-pub fn quantize_int8_simd(input: &[f32], scale: f32) -> Vec<i8> {
+pub fn quantize_int8_unrolled_scalar(input: &[f32], scale: f32) -> Vec<i8> {
     let len = input.len();
     let mut output = Vec::with_capacity(len);
 
     // Pre-compute constants
     let inv_scale = 1.0 / scale;
 
-    // Process 16 elements at a time (4 SIMD operations of 4 floats each)
+    // Process 16 elements at a time (4 unrolled groups of 4 floats each)
     let chunks = len / 16;
     let mut i: usize = 0;
 
@@ -252,8 +251,7 @@ pub fn quantize_int8_simd(input: &[f32], scale: f32) -> Vec<i8> {
     output
 }
 
-/// Fast 4-element quantization using explicit ILP
-/// Compiler will vectorize this to SIMD instructions
+/// 4-element scalar quantization with independent operations for ILP.
 #[inline(always)]
 fn quantize_4_fast(v0: f32, v1: f32, v2: f32, v3: f32, inv_scale: f32) -> (i8, i8, i8, i8) {
     // Multiply all 4 at once (ILP)
@@ -320,29 +318,28 @@ pub fn quantize_int8_scalar(input: &[f32], scale: f32) -> Vec<i8> {
 }
 
 // ============================================================================
-// PRIORITY 2: LZ4 COMPRESSION - ULTRA-FAST PATH
+// EXPERIMENTAL LZ4-STYLE COMPRESSION
 // ============================================================================
 
-/// Ultra-fast LZ4 compression with minimal overhead
-/// Key insight: For buffers under ~128KB, the overhead of ANY compression
-/// algorithm (hash tables, match finding, token encoding) exceeds the
-/// benefit because JavaScript's baseline is essentially an optimized memcpy.
+/// Experimental LZ4-style compressor.
 ///
-/// Strategy:
-/// - Buffers < 128KB: Direct copy (matches JS memcpy performance)
-/// - Buffers >= 128KB: Full LZ4 algorithm (compression savings > overhead)
+/// Honest description of what this actually does:
+/// - Buffers < 128 KiB are returned **verbatim** — no compression happens and
+///   the output is NOT valid LZ4 data.
+/// - Larger buffers go through a hash-based LZ4-like block emitter that has
+///   no matching decompressor in this crate and has never been validated
+///   against the LZ4 format specification.
+///
+/// Do not use this where real LZ4 output is required.
 #[cfg_attr(feature = "wasm", wasm_bindgen)]
-pub fn lz4_compress_optimized(input: &[u8]) -> Vec<u8> {
+pub fn lz4_compress_experimental(input: &[u8]) -> Vec<u8> {
     let len = input.len();
 
-    // For small/medium buffers, direct copy is fastest
-    // JS baseline is memcpy which is highly optimized
-    // Compression overhead only pays off for larger buffers
+    // Below this size the function is a plain copy, not compression.
     if len < 131072 {
         return input.to_vec();
     }
 
-    // For large buffers, use accelerated compression
     lz4_accelerated(input)
 }
 
@@ -526,22 +523,18 @@ fn lz4_accelerated(input: &[u8]) -> Vec<u8> {
     output
 }
 
-/// Scalar LZ4 compression (baseline)
+/// Identity buffer copy. This performs NO compression; it exists only as a
+/// memcpy-cost baseline for benchmarks.
 #[cfg_attr(feature = "wasm", wasm_bindgen)]
-pub fn lz4_compress_scalar(input: &[u8]) -> Vec<u8> {
-    // Simple copy - worst case baseline
+pub fn buffer_copy_baseline(input: &[u8]) -> Vec<u8> {
     input.to_vec()
 }
 
 // ============================================================================
-// PRIORITY 3: CONV2D WITH IM2COL + TILING + FUSED RELU
+// CONV2D (scalar, unrolled 3x3 fast path)
 // ============================================================================
 
-/// High-performance Conv2D with fused operations
-/// - im2col memory layout for sequential access
-/// - Tiled processing for L1 cache
-///
-/// Target: 3-4x faster than naive nested loops
+/// Conv2D with a fully unrolled 3x3 fast path (scalar arithmetic).
 #[cfg_attr(feature = "wasm", wasm_bindgen)]
 pub fn conv2d_optimized(
     input: &[f32],
@@ -634,9 +627,9 @@ pub fn conv2d_scalar(
 // NEW: VECTOR NORM (L2) WITH 8-WIDE UNROLLING
 // ============================================================================
 
-/// High-performance L2 norm with 8-wide accumulation
+/// L2 norm with 8-wide manual unrolling (scalar arithmetic, not SIMD).
 #[cfg_attr(feature = "wasm", wasm_bindgen)]
-pub fn vector_norm_simd(a: &[f32]) -> f32 {
+pub fn vector_norm_unrolled_scalar(a: &[f32]) -> f32 {
     let len = a.len();
     let mut s0: f32 = 0.0;
     let mut s1: f32 = 0.0;
@@ -684,12 +677,12 @@ pub fn vector_norm_scalar(a: &[f32]) -> f32 {
 // NEW: COSINE SIMILARITY
 // ============================================================================
 
-/// High-performance cosine similarity using shared dot product kernel
+/// Cosine similarity built from the unrolled scalar dot product and norm.
 #[cfg_attr(feature = "wasm", wasm_bindgen)]
-pub fn cosine_similarity_simd(a: &[f32], b: &[f32]) -> f32 {
-    let dot = dot_product_simd(a, b);
-    let norm_a = vector_norm_simd(a);
-    let norm_b = vector_norm_simd(b);
+pub fn cosine_similarity_unrolled_scalar(a: &[f32], b: &[f32]) -> f32 {
+    let dot = dot_product_unrolled_scalar(a, b);
+    let norm_a = vector_norm_unrolled_scalar(a);
+    let norm_b = vector_norm_unrolled_scalar(b);
 
     if norm_a > 0.0 && norm_b > 0.0 {
         dot / (norm_a * norm_b)
@@ -1505,7 +1498,7 @@ pub fn vector_clamp(a: &[f32], min_val: f32, max_val: f32) -> Vec<f32> {
 /// Normalize vector to unit length
 #[cfg_attr(feature = "wasm", wasm_bindgen)]
 pub fn vector_normalize(a: &[f32]) -> Vec<f32> {
-    let norm = vector_norm_simd(a);
+    let norm = vector_norm_unrolled_scalar(a);
     if norm > 0.0 {
         vector_scale(a, 1.0 / norm)
     } else {
