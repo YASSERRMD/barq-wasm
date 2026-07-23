@@ -105,7 +105,9 @@ mod simd_tests {
 
     #[wasm_bindgen_test]
     fn simd_dequantize_bit_exact() {
-        let input: Vec<i8> = (0..1000).map(|i| ((i * 37 + 11) % 256) as u8 as i8).collect();
+        let input: Vec<i8> = (0..1000)
+            .map(|i| ((i * 37 + 11) % 256) as u8 as i8)
+            .collect();
         let mut reference = Vec::new();
         scalar::dequantize_i8_to_f32(&input, 0.125, &mut reference);
         let mut got = Vec::new();

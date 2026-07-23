@@ -1517,7 +1517,11 @@ pub fn simd128_enabled() -> bool {
     cfg!(all(target_arch = "wasm32", target_feature = "simd128"))
 }
 
-#[cfg(all(feature = "browser", target_arch = "wasm32", target_feature = "simd128"))]
+#[cfg(all(
+    feature = "browser",
+    target_arch = "wasm32",
+    target_feature = "simd128"
+))]
 mod simd128_exports {
     use crate::kernels::wasm32::simd128;
     use wasm_bindgen::prelude::*;

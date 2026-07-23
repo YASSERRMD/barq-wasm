@@ -1,10 +1,17 @@
 # WebAssembly (WASM) Integration & Usage
 
-Barq-WASM provides a WebAssembly package of **scalar** compute kernels for
-browser-based numerical computation. No function in the current package
-executes SIMD instructions; the `*_unrolled_scalar` variants are manually
-unrolled scalar loops. Explicit WASM SIMD128 kernels are planned (Phase 4)
-and will ship as a separate, verified bundle.
+Barq-WASM ships **two** browser bundles:
+
+- `pkg/scalar` — compiled with `simd128` disabled. Contains only scalar
+  kernels; binary-verified to contain **zero** SIMD instructions.
+- `pkg/simd` — compiled with `simd128` enabled. Adds `*_simd128` exports that
+  execute explicit `v128`/`f32x4` instructions; binary-verified to contain
+  `v128.load`, `f32x4.mul`, `f32x4.add`, `i32x4.trunc_sat_f32x4_s`.
+
+JavaScript must feature-detect SIMD support and load the matching bundle —
+see `docs/browser/loader.js`. Each bundle exports `simd128_enabled()` so the
+loader can cross-check what it loaded. The `*_unrolled_scalar` functions
+remain scalar in both bundles.
 
 ## Prerequisites
 
@@ -14,15 +21,12 @@ and will ship as a separate, verified bundle.
   cargo install wasm-pack
   ```
 
-## Building the Package
-
-To build the WASM package for the web:
+## Building the Packages
 
 ```bash
-wasm-pack build --target web --features wasm --no-default-features
+./scripts/build-browser-bundles.sh   # builds pkg/scalar and pkg/simd
+./scripts/verify-wasm-simd.sh        # verifies instruction content + exports
 ```
-
-This will create a `pkg/` directory in your project root containing the WASM binary and JavaScript glue code.
 
 ## Quick Start (HTML/JavaScript)
 
@@ -119,6 +123,30 @@ All functions are scalar implementations.
 | `std_dev(a)` | Standard deviation | `(Float32Array)` |
 | `lz4_compress_experimental(input)`| Experimental LZ4-style compressor. Returns the input **verbatim** below 128 KiB; larger inputs use an unvalidated LZ4-like block format with no decompressor. | `(Uint8Array)` |
 | `buffer_copy_baseline(input)` | Identity copy (benchmark baseline, no compression) | `(Uint8Array)` |
+
+### SIMD128 API (simd bundle only)
+
+| Function | Instructions used |
+|:---|:---|
+| `dot_product_simd128(a, b)` | `v128.load`, `f32x4.mul`, `f32x4.add` |
+| `vector_norm_simd128(a)` | `v128.load`, `f32x4.mul`, `f32x4.add` |
+| `cosine_similarity_simd128(a, b)` | composition of the above |
+| `quantize_int8_simd128(input, scale)` | `f32x4.div`, `f32x4.nearest`, `i32x4.trunc_sat_f32x4_s`, `i16x8.narrow_i32x4_s`, `i8x16.narrow_i16x8_s` |
+| `dequantize_int8_simd128(input, scale)` | `i16x8/i32x4` extends, `f32x4.convert_i32x4_s`, `f32x4.mul` |
+| `vector_add_simd128(a, b)` | `f32x4.add` |
+| `vector_elementwise_multiply_simd128(a, b)` | `f32x4.mul` |
+| `simd128_enabled()` | (both bundles; reports compile-time truth) |
+
+Quantization is bit-identical to the scalar reference (round-to-nearest-even,
+saturating, NaN→0) and tested as such in a real browser.
+
+## Browser testing
+
+```bash
+RUSTFLAGS="-C target-feature=+simd128" wasm-pack test --headless --chrome  --no-default-features --features browser
+RUSTFLAGS="-C target-feature=-simd128" wasm-pack test --headless --chrome  --no-default-features --features browser
+RUSTFLAGS="-C target-feature=+simd128" wasm-pack test --headless --firefox --no-default-features --features browser
+```
 
 ## Benchmarking
 

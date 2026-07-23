@@ -28,3 +28,25 @@ jobs:
       run: ./scripts/verify-native-simd.sh
     - name: Report selected kernel backend
       run: cargo test --release --test kernel_differential -- --nocapture at_least_one_simd_backend
+
+  wasm:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+    - uses: dtolnay/rust-toolchain@stable
+      with:
+        targets: wasm32-unknown-unknown
+    - name: Install wasm-pack
+      run: curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
+    - name: Check browser feature compiles (both configurations)
+      run: |
+        RUSTFLAGS="-C target-feature=+simd128" cargo check --target wasm32-unknown-unknown --no-default-features --features browser
+        RUSTFLAGS="-C target-feature=-simd128" cargo check --target wasm32-unknown-unknown --no-default-features --features browser
+    - name: Build bundles and verify SIMD instruction content
+      run: ./scripts/verify-wasm-simd.sh
+    - name: Browser tests (Chrome, simd bundle)
+      run: RUSTFLAGS="-C target-feature=+simd128" wasm-pack test --headless --chrome --no-default-features --features browser
+    - name: Browser tests (Chrome, scalar bundle)
+      run: RUSTFLAGS="-C target-feature=-simd128" wasm-pack test --headless --chrome --no-default-features --features browser
+    - name: Browser tests (Firefox, simd bundle)
+      run: RUSTFLAGS="-C target-feature=+simd128" wasm-pack test --headless --firefox --no-default-features --features browser
