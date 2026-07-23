@@ -69,6 +69,21 @@ truth.
   above vector width, 10k+), sign/zero/NaN/infinity policies, misaligned
   slices, and property-based randomized tests.
 
+**Browser WASM SIMD128 kernels** (`src/kernels/wasm32/simd128.rs`): explicit
+`v128`/`f32x4` implementations of dot product, L2 norm, cosine similarity,
+INT8 quantize/dequantize (bit-identical to the scalar policy), and
+elementwise ops.
+
+- Shipped as two bundles: `pkg/scalar` (zero SIMD instructions, verified) and
+  `pkg/simd` (`v128.load`/`f32x4.mul`/`f32x4.add`/`i32x4.trunc_sat_f32x4_s`
+  verified present via the wasmparser-based `wasm-inspect` tool).
+- `docs/browser/loader.js` feature-detects SIMD before loading the simd
+  bundle and cross-checks the bundle's own `simd128_enabled()` report.
+- Verified by headless-browser tests (Chrome locally and in CI, Firefox in
+  CI): differential vs scalar, bit-exact quantization including
+  NaN/infinity/ties, repeated-invocation stability, and 500k-element
+  transfers.
+
 **Scalar compute kernels** (`src/wasm_bindings.rs`), exposed to JavaScript via
 `wasm-bindgen` and usable natively:
 
@@ -94,7 +109,6 @@ These are planned phases, not features:
 
 | Planned capability | Phase |
 |---|---|
-| Browser WASM SIMD128 kernels with separate scalar/simd bundles and binary instruction verification | 4 |
 | Structural WASM pattern analysis (parsed modules, evidence-based confidence) | 5 |
 | Safe specialization (host-kernel imports, narrowly-scoped Cranelift JIT) | 6 |
 | Reproducible benchmarks with recorded environment and correctness gates | 7 |
@@ -126,11 +140,12 @@ cargo test
 ### Building for the browser
 
 ```bash
-wasm-pack build --target web --features wasm
+./scripts/build-browser-bundles.sh   # pkg/scalar + pkg/simd
+./scripts/verify-wasm-simd.sh        # verify instruction content
 ```
 
-This produces a `pkg/` directory with the WASM binary and JavaScript glue. All
-exported kernels are scalar; see [docs/WASM.md](docs/WASM.md).
+See [docs/WASM.md](docs/WASM.md) for the API and
+[docs/browser/loader.js](docs/browser/loader.js) for feature-detected loading.
 
 ### CLI
 

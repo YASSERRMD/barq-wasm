@@ -152,6 +152,12 @@ export function relu(a: Float32Array): Float32Array;
 export function sigmoid(a: Float32Array): Float32Array;
 
 /**
+ * True when this bundle was compiled with the wasm `simd128` target feature.
+ * JavaScript can use this to prove which bundle it loaded.
+ */
+export function simd128_enabled(): boolean;
+
+/**
  * Softmax function (numerically stable)
  */
 export function softmax(a: Float32Array): Float32Array;
@@ -252,6 +258,7 @@ export interface InitOutput {
     readonly quantize_int8_unrolled_scalar: (a: number, b: number, c: number) => [number, number];
     readonly relu: (a: number, b: number) => [number, number];
     readonly sigmoid: (a: number, b: number) => [number, number];
+    readonly simd128_enabled: () => number;
     readonly softmax: (a: number, b: number) => [number, number];
     readonly std_dev: (a: number, b: number) => number;
     readonly variance: (a: number, b: number) => number;

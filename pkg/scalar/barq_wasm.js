@@ -433,6 +433,16 @@ export function sigmoid(a) {
 }
 
 /**
+ * True when this bundle was compiled with the wasm `simd128` target feature.
+ * JavaScript can use this to prove which bundle it loaded.
+ * @returns {boolean}
+ */
+export function simd128_enabled() {
+    const ret = wasm.simd128_enabled();
+    return ret !== 0;
+}
+
+/**
  * Softmax function (numerically stable)
  * @param {Float32Array} a
  * @returns {Float32Array}
