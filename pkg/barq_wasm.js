@@ -1,59 +1,4 @@
-let wasm;
-
-function getArrayF32FromWasm0(ptr, len) {
-    ptr = ptr >>> 0;
-    return getFloat32ArrayMemory0().subarray(ptr / 4, ptr / 4 + len);
-}
-
-function getArrayI8FromWasm0(ptr, len) {
-    ptr = ptr >>> 0;
-    return getInt8ArrayMemory0().subarray(ptr / 1, ptr / 1 + len);
-}
-
-function getArrayU8FromWasm0(ptr, len) {
-    ptr = ptr >>> 0;
-    return getUint8ArrayMemory0().subarray(ptr / 1, ptr / 1 + len);
-}
-
-let cachedFloat32ArrayMemory0 = null;
-function getFloat32ArrayMemory0() {
-    if (cachedFloat32ArrayMemory0 === null || cachedFloat32ArrayMemory0.byteLength === 0) {
-        cachedFloat32ArrayMemory0 = new Float32Array(wasm.memory.buffer);
-    }
-    return cachedFloat32ArrayMemory0;
-}
-
-let cachedInt8ArrayMemory0 = null;
-function getInt8ArrayMemory0() {
-    if (cachedInt8ArrayMemory0 === null || cachedInt8ArrayMemory0.byteLength === 0) {
-        cachedInt8ArrayMemory0 = new Int8Array(wasm.memory.buffer);
-    }
-    return cachedInt8ArrayMemory0;
-}
-
-let cachedUint8ArrayMemory0 = null;
-function getUint8ArrayMemory0() {
-    if (cachedUint8ArrayMemory0 === null || cachedUint8ArrayMemory0.byteLength === 0) {
-        cachedUint8ArrayMemory0 = new Uint8Array(wasm.memory.buffer);
-    }
-    return cachedUint8ArrayMemory0;
-}
-
-function passArray8ToWasm0(arg, malloc) {
-    const ptr = malloc(arg.length * 1, 1) >>> 0;
-    getUint8ArrayMemory0().set(arg, ptr / 1);
-    WASM_VECTOR_LEN = arg.length;
-    return ptr;
-}
-
-function passArrayF32ToWasm0(arg, malloc) {
-    const ptr = malloc(arg.length * 4, 4) >>> 0;
-    getFloat32ArrayMemory0().set(arg, ptr / 4);
-    WASM_VECTOR_LEN = arg.length;
-    return ptr;
-}
-
-let WASM_VECTOR_LEN = 0;
+/* @ts-self-types="./barq_wasm.d.ts" */
 
 /**
  * Argmax: index of maximum value with 4-wide tracking
@@ -114,11 +59,22 @@ export function batch_normalize(input, gamma, beta, epsilon) {
 }
 
 /**
- * High-performance Conv2D with fused operations
- * - im2col memory layout for sequential access
- * - Tiled processing for L1 cache
- *
- * Target: 3-4x faster than naive nested loops
+ * Identity buffer copy. This performs NO compression; it exists only as a
+ * memcpy-cost baseline for benchmarks.
+ * @param {Uint8Array} input
+ * @returns {Uint8Array}
+ */
+export function buffer_copy_baseline(input) {
+    const ptr0 = passArray8ToWasm0(input, wasm.__wbindgen_malloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ret = wasm.buffer_copy_baseline(ptr0, len0);
+    var v2 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
+    wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
+    return v2;
+}
+
+/**
+ * Conv2D with a fully unrolled 3x3 fast path (scalar arithmetic).
  * @param {Float32Array} input
  * @param {Float32Array} kernel
  * @param {number} width
@@ -173,17 +129,17 @@ export function cosine_similarity_scalar(a, b) {
 }
 
 /**
- * High-performance cosine similarity using shared dot product kernel
+ * Cosine similarity built from the unrolled scalar dot product and norm.
  * @param {Float32Array} a
  * @param {Float32Array} b
  * @returns {number}
  */
-export function cosine_similarity_simd(a, b) {
+export function cosine_similarity_unrolled_scalar(a, b) {
     const ptr0 = passArrayF32ToWasm0(a, wasm.__wbindgen_malloc);
     const len0 = WASM_VECTOR_LEN;
     const ptr1 = passArrayF32ToWasm0(b, wasm.__wbindgen_malloc);
     const len1 = WASM_VECTOR_LEN;
-    const ret = wasm.cosine_similarity_simd(ptr0, len0, ptr1, len1);
+    const ret = wasm.cosine_similarity_unrolled_scalar(ptr0, len0, ptr1, len1);
     return ret;
 }
 
@@ -218,19 +174,19 @@ export function dot_product_scalar(a, b) {
 }
 
 /**
- * Ultra-fast dot product with 16-wide unrolling and unsafe pointer access
- * Uses 16 independent accumulators to saturate CPU execution ports
- * Target: 3-4x faster than naive scalar
+ * Dot product with 16-wide manual unrolling and unsafe pointer access.
+ * Uses 16 independent scalar accumulators for instruction-level parallelism.
+ * This is NOT a SIMD implementation.
  * @param {Float32Array} a
  * @param {Float32Array} b
  * @returns {number}
  */
-export function dot_product_simd(a, b) {
+export function dot_product_unrolled_scalar(a, b) {
     const ptr0 = passArrayF32ToWasm0(a, wasm.__wbindgen_malloc);
     const len0 = WASM_VECTOR_LEN;
     const ptr1 = passArrayF32ToWasm0(b, wasm.__wbindgen_malloc);
     const len1 = WASM_VECTOR_LEN;
-    const ret = wasm.dot_product_simd(ptr0, len0, ptr1, len1);
+    const ret = wasm.dot_product_unrolled_scalar(ptr0, len0, ptr1, len1);
     return ret;
 }
 
@@ -265,35 +221,23 @@ export function leaky_relu(a, alpha) {
 }
 
 /**
- * Ultra-fast LZ4 compression with minimal overhead
- * Key insight: For buffers under ~128KB, the overhead of ANY compression
- * algorithm (hash tables, match finding, token encoding) exceeds the
- * benefit because JavaScript's baseline is essentially an optimized memcpy.
+ * Experimental LZ4-style compressor.
  *
- * Strategy:
- * - Buffers < 128KB: Direct copy (matches JS memcpy performance)
- * - Buffers >= 128KB: Full LZ4 algorithm (compression savings > overhead)
+ * Honest description of what this actually does:
+ * - Buffers < 128 KiB are returned **verbatim** — no compression happens and
+ *   the output is NOT valid LZ4 data.
+ * - Larger buffers go through a hash-based LZ4-like block emitter that has
+ *   no matching decompressor in this crate and has never been validated
+ *   against the LZ4 format specification.
+ *
+ * Do not use this where real LZ4 output is required.
  * @param {Uint8Array} input
  * @returns {Uint8Array}
  */
-export function lz4_compress_optimized(input) {
+export function lz4_compress_experimental(input) {
     const ptr0 = passArray8ToWasm0(input, wasm.__wbindgen_malloc);
     const len0 = WASM_VECTOR_LEN;
-    const ret = wasm.lz4_compress_optimized(ptr0, len0);
-    var v2 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
-    wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
-    return v2;
-}
-
-/**
- * Scalar LZ4 compression (baseline)
- * @param {Uint8Array} input
- * @returns {Uint8Array}
- */
-export function lz4_compress_scalar(input) {
-    const ptr0 = passArray8ToWasm0(input, wasm.__wbindgen_malloc);
-    const len0 = WASM_VECTOR_LEN;
-    const ret = wasm.lz4_compress_scalar(ptr0, len0);
+    const ret = wasm.lz4_compress_experimental(ptr0, len0);
     var v2 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
     wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
     return v2;
@@ -350,9 +294,8 @@ export function matrix_multiply_scalar(a, b, n) {
 }
 
 /**
- * High-performance matrix multiplication with multi-level cache tiling
- * Uses 32x32 tiles (fits in L1), processes in k-i-j order for row-major optimization
- * Target: 6-8x faster than naive O(n³)
+ * Matrix multiplication with multi-level cache tiling (scalar arithmetic).
+ * Uses 32x32 tiles, processed in k-i-j order for row-major access.
  * @param {Float32Array} a
  * @param {Float32Array} b
  * @param {number} n
@@ -445,17 +388,17 @@ export function quantize_int8_scalar(input, scale) {
 }
 
 /**
- * Native WASM SIMD INT8 quantization using v128 instructions
- * Processes 4 floats at a time using f32x4 SIMD operations
- * Target: 0.5-0.8ms (3x faster than scalar)
+ * INT8 quantization, manually unrolled to process 16 elements per iteration.
+ * This is a scalar implementation: it does NOT use `v128`/`f32x4`
+ * instructions or any other explicit SIMD.
  * @param {Float32Array} input
  * @param {number} scale
  * @returns {Int8Array}
  */
-export function quantize_int8_simd(input, scale) {
+export function quantize_int8_unrolled_scalar(input, scale) {
     const ptr0 = passArrayF32ToWasm0(input, wasm.__wbindgen_malloc);
     const len0 = WASM_VECTOR_LEN;
-    const ret = wasm.quantize_int8_simd(ptr0, len0, scale);
+    const ret = wasm.quantize_int8_unrolled_scalar(ptr0, len0, scale);
     var v2 = getArrayI8FromWasm0(ret[0], ret[1]).slice();
     wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
     return v2;
@@ -614,14 +557,14 @@ export function vector_norm_scalar(a) {
 }
 
 /**
- * High-performance L2 norm with 8-wide accumulation
+ * L2 norm with 8-wide manual unrolling (scalar arithmetic, not SIMD).
  * @param {Float32Array} a
  * @returns {number}
  */
-export function vector_norm_simd(a) {
+export function vector_norm_unrolled_scalar(a) {
     const ptr0 = passArrayF32ToWasm0(a, wasm.__wbindgen_malloc);
     const len0 = WASM_VECTOR_LEN;
-    const ret = wasm.vector_norm_simd(ptr0, len0);
+    const ret = wasm.vector_norm_unrolled_scalar(ptr0, len0);
     return ret;
 }
 
@@ -682,8 +625,91 @@ export function vector_sum(a) {
     const ret = wasm.vector_sum(ptr0, len0);
     return ret;
 }
+function __wbg_get_imports() {
+    const import0 = {
+        __proto__: null,
+        __wbindgen_init_externref_table: function() {
+            const table = wasm.__wbindgen_externrefs;
+            const offset = table.grow(4);
+            table.set(0, undefined);
+            table.set(offset + 0, undefined);
+            table.set(offset + 1, null);
+            table.set(offset + 2, true);
+            table.set(offset + 3, false);
+        },
+    };
+    return {
+        __proto__: null,
+        "./barq_wasm_bg.js": import0,
+    };
+}
 
-const EXPECTED_RESPONSE_TYPES = new Set(['basic', 'cors', 'default']);
+function getArrayF32FromWasm0(ptr, len) {
+    ptr = ptr >>> 0;
+    return getFloat32ArrayMemory0().subarray(ptr / 4, ptr / 4 + len);
+}
+
+function getArrayI8FromWasm0(ptr, len) {
+    ptr = ptr >>> 0;
+    return getInt8ArrayMemory0().subarray(ptr / 1, ptr / 1 + len);
+}
+
+function getArrayU8FromWasm0(ptr, len) {
+    ptr = ptr >>> 0;
+    return getUint8ArrayMemory0().subarray(ptr / 1, ptr / 1 + len);
+}
+
+let cachedFloat32ArrayMemory0 = null;
+function getFloat32ArrayMemory0() {
+    if (cachedFloat32ArrayMemory0 === null || cachedFloat32ArrayMemory0.byteLength === 0) {
+        cachedFloat32ArrayMemory0 = new Float32Array(wasm.memory.buffer);
+    }
+    return cachedFloat32ArrayMemory0;
+}
+
+let cachedInt8ArrayMemory0 = null;
+function getInt8ArrayMemory0() {
+    if (cachedInt8ArrayMemory0 === null || cachedInt8ArrayMemory0.byteLength === 0) {
+        cachedInt8ArrayMemory0 = new Int8Array(wasm.memory.buffer);
+    }
+    return cachedInt8ArrayMemory0;
+}
+
+let cachedUint8ArrayMemory0 = null;
+function getUint8ArrayMemory0() {
+    if (cachedUint8ArrayMemory0 === null || cachedUint8ArrayMemory0.byteLength === 0) {
+        cachedUint8ArrayMemory0 = new Uint8Array(wasm.memory.buffer);
+    }
+    return cachedUint8ArrayMemory0;
+}
+
+function passArray8ToWasm0(arg, malloc) {
+    const ptr = malloc(arg.length * 1, 1) >>> 0;
+    getUint8ArrayMemory0().set(arg, ptr / 1);
+    WASM_VECTOR_LEN = arg.length;
+    return ptr;
+}
+
+function passArrayF32ToWasm0(arg, malloc) {
+    const ptr = malloc(arg.length * 4, 4) >>> 0;
+    getFloat32ArrayMemory0().set(arg, ptr / 4);
+    WASM_VECTOR_LEN = arg.length;
+    return ptr;
+}
+
+let WASM_VECTOR_LEN = 0;
+
+let wasmModule, wasmInstance, wasm;
+function __wbg_finalize_init(instance, module) {
+    wasmInstance = instance;
+    wasm = instance.exports;
+    wasmModule = module;
+    cachedFloat32ArrayMemory0 = null;
+    cachedInt8ArrayMemory0 = null;
+    cachedUint8ArrayMemory0 = null;
+    wasm.__wbindgen_start();
+    return wasm;
+}
 
 async function __wbg_load(module, imports) {
     if (typeof Response === 'function' && module instanceof Response) {
@@ -691,14 +717,12 @@ async function __wbg_load(module, imports) {
             try {
                 return await WebAssembly.instantiateStreaming(module, imports);
             } catch (e) {
-                const validResponse = module.ok && EXPECTED_RESPONSE_TYPES.has(module.type);
+                const validResponse = module.ok && expectedResponseType(module.type);
 
                 if (validResponse && module.headers.get('Content-Type') !== 'application/wasm') {
                     console.warn("`WebAssembly.instantiateStreaming` failed because your server does not serve Wasm with `application/wasm` MIME type. Falling back to `WebAssembly.instantiate` which is slower. Original error:\n", e);
 
-                } else {
-                    throw e;
-                }
+                } else { throw e; }
             }
         }
 
@@ -713,41 +737,20 @@ async function __wbg_load(module, imports) {
             return instance;
         }
     }
-}
 
-function __wbg_get_imports() {
-    const imports = {};
-    imports.wbg = {};
-    imports.wbg.__wbindgen_init_externref_table = function() {
-        const table = wasm.__wbindgen_externrefs;
-        const offset = table.grow(4);
-        table.set(0, undefined);
-        table.set(offset + 0, undefined);
-        table.set(offset + 1, null);
-        table.set(offset + 2, true);
-        table.set(offset + 3, false);
-    };
-
-    return imports;
-}
-
-function __wbg_finalize_init(instance, module) {
-    wasm = instance.exports;
-    __wbg_init.__wbindgen_wasm_module = module;
-    cachedFloat32ArrayMemory0 = null;
-    cachedInt8ArrayMemory0 = null;
-    cachedUint8ArrayMemory0 = null;
-
-
-    wasm.__wbindgen_start();
-    return wasm;
+    function expectedResponseType(type) {
+        switch (type) {
+            case 'basic': case 'cors': case 'default': return true;
+        }
+        return false;
+    }
 }
 
 function initSync(module) {
     if (wasm !== undefined) return wasm;
 
 
-    if (typeof module !== 'undefined') {
+    if (module !== undefined) {
         if (Object.getPrototypeOf(module) === Object.prototype) {
             ({module} = module)
         } else {
@@ -767,7 +770,7 @@ async function __wbg_init(module_or_path) {
     if (wasm !== undefined) return wasm;
 
 
-    if (typeof module_or_path !== 'undefined') {
+    if (module_or_path !== undefined) {
         if (Object.getPrototypeOf(module_or_path) === Object.prototype) {
             ({module_or_path} = module_or_path)
         } else {
@@ -775,7 +778,7 @@ async function __wbg_init(module_or_path) {
         }
     }
 
-    if (typeof module_or_path === 'undefined') {
+    if (module_or_path === undefined) {
         module_or_path = new URL('barq_wasm_bg.wasm', import.meta.url);
     }
     const imports = __wbg_get_imports();
@@ -789,5 +792,4 @@ async function __wbg_init(module_or_path) {
     return __wbg_finalize_init(instance, module);
 }
 
-export { initSync };
-export default __wbg_init;
+export { initSync, __wbg_init as default };
