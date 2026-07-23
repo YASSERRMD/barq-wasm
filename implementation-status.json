@@ -1,6 +1,6 @@
 {
   "$comment": "Machine-readable capability status. Every advertised capability must appear here. 'implemented' requires implementation + correctness tests + verification; anything less is 'partial' or 'absent'. Checked in CI.",
-  "updated_for_phase": 8,
+  "updated_for_phase": 9,
   "capabilities": [
     {
       "capability": "native WebAssembly module execution (validate/load/instantiate/invoke)",
@@ -17,10 +17,10 @@
       ],
       "benchmarks": [],
       "verification": [
-        "Wasmtime 24 engine; typed+dynamic invocation asserted on concrete values; traps, fuel exhaustion, epoch timeouts, and memory limits mapped to typed BarqError variants; WASI stdout captured and asserted",
+        "Wasmtime 36 LTS engine (patched line per RUSTSEC advisories); typed+dynamic invocation asserted on concrete values; traps, fuel exhaustion, epoch timeouts, and memory limits mapped to typed BarqError variants; WASI stdout captured and asserted",
         "CLI: run fixtures/add.wasm --invoke add --arg-i32 20 --arg-i32 22 returns 42"
       ],
-      "notes": "Backed by Wasmtime, not a from-scratch engine. Fuel/timeout are opt-in via RuntimeConfig."
+      "notes": "Backed by Wasmtime 36 LTS, not a from-scratch engine. Fuel/timeout are opt-in via RuntimeConfig."
     },
     {
       "capability": "native AVX2/FMA kernels (dot product, L2 norm, cosine, quantize, dequantize, matmul)",
