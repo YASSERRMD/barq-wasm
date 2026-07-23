@@ -143,7 +143,12 @@ fn matrix_multiply_tiled_matches_scalar() {
         let reference = matrix_multiply_scalar(&a, &b, n);
         let tiled = matrix_multiply_tiled(&a, &b, n);
         for i in 0..n * n {
-            assert_close(reference[i], tiled[i], 1e-3, &format!("matmul n={n} idx={i}"));
+            assert_close(
+                reference[i],
+                tiled[i],
+                1e-3,
+                &format!("matmul n={n} idx={i}"),
+            );
         }
     }
 }
