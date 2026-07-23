@@ -1,6 +1,8 @@
 #[cfg(feature = "analyzer")]
 pub mod analyzer;
 pub mod error;
+#[cfg(feature = "jit-specialization")]
+pub mod jit;
 pub mod kernels;
 #[cfg(feature = "native-runtime")]
 pub mod runtime;

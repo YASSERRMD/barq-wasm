@@ -24,6 +24,13 @@ cli = ["native-runtime", "dep:clap"]
 browser = ["dep:wasm-bindgen", "getrandom/js"]
 inspect = ["dep:wasmparser"]
 analyzer = ["dep:wasmparser"]
+jit-specialization = [
+    "dep:cranelift-codegen",
+    "dep:cranelift-frontend",
+    "dep:cranelift-jit",
+    "dep:cranelift-native",
+    "dep:cranelift-module",
+]
 # Deprecated alias for `browser`, kept until external build scripts migrate.
 wasm = ["browser"]
 
@@ -33,6 +40,11 @@ anyhow = "1.0"
 wasmtime = { version = "24.0", optional = true }
 wasmtime-wasi = { version = "24.0", optional = true }
 wasmparser = { version = "0.215", optional = true }
+cranelift-codegen = { version = "0.111", optional = true }
+cranelift-frontend = { version = "0.111", optional = true }
+cranelift-jit = { version = "0.111", optional = true }
+cranelift-native = { version = "0.111", optional = true }
+cranelift-module = { version = "0.111", optional = true }
 clap = { version = "4.0", features = ["derive"], optional = true }
 wasm-bindgen = { version = "0.2", optional = true }
 getrandom = { version = "0.2", optional = true }
