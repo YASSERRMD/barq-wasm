@@ -131,7 +131,10 @@ pub unsafe fn quantize_f32_to_i8(input: &[f32], scale: f32, output: &mut Vec<i8>
         let scaled = _mm256_div_ps(x, vscale);
         // Map +/-inf into the clampable range before conversion; NaN lanes
         // are zeroed below via the ordered-compare mask.
-        let bounded = _mm256_min_ps(_mm256_max_ps(scaled, _mm256_set1_ps(-1.0e4)), _mm256_set1_ps(1.0e4));
+        let bounded = _mm256_min_ps(
+            _mm256_max_ps(scaled, _mm256_set1_ps(-1.0e4)),
+            _mm256_set1_ps(1.0e4),
+        );
         let rounded = _mm256_round_ps(bounded, _MM_FROUND_TO_NEAREST_INT | _MM_FROUND_NO_EXC);
         let ints = _mm256_cvttps_epi32(rounded);
         let clamped = _mm256_max_epi32(_mm256_min_epi32(ints, vmax), vmin);

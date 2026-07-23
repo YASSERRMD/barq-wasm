@@ -17,8 +17,7 @@ pub mod arm;
 pub mod x86;
 
 pub use dispatch::{
-    cpu_capabilities, select_backend, Architecture, CpuCapabilities, KernelBackend,
-    KernelExecution,
+    cpu_capabilities, select_backend, Architecture, CpuCapabilities, KernelBackend, KernelExecution,
 };
 
 use crate::error::{BarqError, BarqResult};

@@ -9,7 +9,9 @@
 use barq_wasm::error::BarqError;
 use barq_wasm::kernels::*;
 
-const LENGTHS: &[usize] = &[0, 1, 3, 4, 5, 7, 8, 9, 15, 16, 17, 31, 32, 33, 127, 128, 129, 1024, 10_007];
+const LENGTHS: &[usize] = &[
+    0, 1, 3, 4, 5, 7, 8, 9, 15, 16, 17, 31, 32, 33, 127, 128, 129, 1024, 10_007,
+];
 
 fn pseudo_random_f32(len: usize, seed: u64, lo: f32, hi: f32) -> Vec<f32> {
     let mut state = seed.wrapping_mul(6364136223846793005).wrapping_add(1);
@@ -33,10 +35,13 @@ fn assert_rel_eq(a: f32, b: f32, max_rel: f32, ctx: &str) {
     assert!(diff <= max_rel * scale, "{ctx}: {a} vs {b} (diff {diff})");
 }
 
+type DotFn = fn(&[f32], &[f32]) -> barq_wasm::error::BarqResult<f32>;
+type NamedDotImpl = (&'static str, DotFn);
+
 /// All dot-product implementations available on this host, with names.
-fn dot_impls() -> Vec<(&'static str, fn(&[f32], &[f32]) -> barq_wasm::error::BarqResult<f32>)> {
+fn dot_impls() -> Vec<NamedDotImpl> {
     let caps = cpu_capabilities();
-    let mut impls: Vec<(&'static str, fn(&[f32], &[f32]) -> _)> = vec![];
+    let mut impls: Vec<NamedDotImpl> = vec![];
     if caps.avx2 {
         impls.push(("avx2", dot_product_avx2 as _));
     }
@@ -87,7 +92,9 @@ fn dot_product_matches_scalar_across_lengths() {
 #[test]
 fn dot_product_signs_and_zeros() {
     let zeros = vec![0.0f32; 33];
-    let mixed: Vec<f32> = (0..33).map(|i| if i % 2 == 0 { -(i as f32) } else { i as f32 }).collect();
+    let mixed: Vec<f32> = (0..33)
+        .map(|i| if i % 2 == 0 { -(i as f32) } else { i as f32 })
+        .collect();
     for (name, f) in dot_impls() {
         assert_eq!(f(&zeros, &mixed).unwrap(), 0.0, "{name} zeros");
         let r = f(&mixed, &mixed).unwrap();
@@ -162,15 +169,45 @@ fn l2_norm_and_cosine_match_scalar() {
         let norm_ref = l2_norm_scalar(&a).unwrap();
         let cos_ref = cosine_similarity_scalar(&a, &b).unwrap();
         if caps.avx2 {
-            assert_rel_eq(norm_ref, l2_norm_avx2(&a).unwrap(), 1e-4, &format!("norm avx2 len={len}"));
-            assert_rel_eq(cos_ref, cosine_similarity_avx2(&a, &b).unwrap(), 1e-3, &format!("cos avx2 len={len}"));
+            assert_rel_eq(
+                norm_ref,
+                l2_norm_avx2(&a).unwrap(),
+                1e-4,
+                &format!("norm avx2 len={len}"),
+            );
+            assert_rel_eq(
+                cos_ref,
+                cosine_similarity_avx2(&a, &b).unwrap(),
+                1e-3,
+                &format!("cos avx2 len={len}"),
+            );
         }
         if caps.neon {
-            assert_rel_eq(norm_ref, l2_norm_neon(&a).unwrap(), 1e-4, &format!("norm neon len={len}"));
-            assert_rel_eq(cos_ref, cosine_similarity_neon(&a, &b).unwrap(), 1e-3, &format!("cos neon len={len}"));
+            assert_rel_eq(
+                norm_ref,
+                l2_norm_neon(&a).unwrap(),
+                1e-4,
+                &format!("norm neon len={len}"),
+            );
+            assert_rel_eq(
+                cos_ref,
+                cosine_similarity_neon(&a, &b).unwrap(),
+                1e-3,
+                &format!("cos neon len={len}"),
+            );
         }
-        assert_rel_eq(norm_ref, l2_norm(&a).unwrap(), 1e-4, &format!("norm auto len={len}"));
-        assert_rel_eq(cos_ref, cosine_similarity(&a, &b).unwrap(), 1e-3, &format!("cos auto len={len}"));
+        assert_rel_eq(
+            norm_ref,
+            l2_norm(&a).unwrap(),
+            1e-4,
+            &format!("norm auto len={len}"),
+        );
+        assert_rel_eq(
+            cos_ref,
+            cosine_similarity(&a, &b).unwrap(),
+            1e-3,
+            &format!("cos auto len={len}"),
+        );
     }
 }
 
@@ -203,12 +240,24 @@ fn quantize_is_bit_exact_against_scalar() {
         for &scale in &[1.0f32, 0.5, 0.037, 2.5] {
             let reference = quantize_i8_scalar(&input, scale).unwrap();
             if caps.avx2 {
-                assert_eq!(reference, quantize_i8_avx2(&input, scale).unwrap(), "avx2 len={len} scale={scale}");
+                assert_eq!(
+                    reference,
+                    quantize_i8_avx2(&input, scale).unwrap(),
+                    "avx2 len={len} scale={scale}"
+                );
             }
             if caps.neon {
-                assert_eq!(reference, quantize_i8_neon(&input, scale).unwrap(), "neon len={len} scale={scale}");
+                assert_eq!(
+                    reference,
+                    quantize_i8_neon(&input, scale).unwrap(),
+                    "neon len={len} scale={scale}"
+                );
             }
-            assert_eq!(reference, quantize_i8(&input, scale).unwrap(), "auto len={len} scale={scale}");
+            assert_eq!(
+                reference,
+                quantize_i8(&input, scale).unwrap(),
+                "auto len={len} scale={scale}"
+            );
         }
     }
 }
@@ -267,16 +316,30 @@ fn quantize_zero_scale_is_typed_error() {
 fn dequantize_is_bit_exact_against_scalar() {
     let caps = cpu_capabilities();
     for &len in LENGTHS {
-        let input: Vec<i8> = (0..len).map(|i| ((i * 37 + 11) % 256) as u8 as i8).collect();
+        let input: Vec<i8> = (0..len)
+            .map(|i| ((i * 37 + 11) % 256) as u8 as i8)
+            .collect();
         for &scale in &[1.0f32, 0.125, 0.037] {
             let reference = dequantize_i8_scalar(&input, scale).unwrap();
             if caps.avx2 {
-                assert_eq!(reference, dequantize_i8_avx2(&input, scale).unwrap(), "avx2 len={len}");
+                assert_eq!(
+                    reference,
+                    dequantize_i8_avx2(&input, scale).unwrap(),
+                    "avx2 len={len}"
+                );
             }
             if caps.neon {
-                assert_eq!(reference, dequantize_i8_neon(&input, scale).unwrap(), "neon len={len}");
+                assert_eq!(
+                    reference,
+                    dequantize_i8_neon(&input, scale).unwrap(),
+                    "neon len={len}"
+                );
             }
-            assert_eq!(reference, dequantize_i8(&input, scale).unwrap(), "auto len={len}");
+            assert_eq!(
+                reference,
+                dequantize_i8(&input, scale).unwrap(),
+                "auto len={len}"
+            );
         }
     }
 }
@@ -313,18 +376,33 @@ fn matrix_multiply_matches_scalar() {
         if caps.avx2 && caps.fma {
             let got = matrix_multiply_avx2_fma(&a, &b, m, k, n).unwrap();
             for i in 0..m * n {
-                assert_rel_eq(reference[i], got[i], 1e-4, &format!("matmul avx2fma {m}x{k}x{n} idx={i}"));
+                assert_rel_eq(
+                    reference[i],
+                    got[i],
+                    1e-4,
+                    &format!("matmul avx2fma {m}x{k}x{n} idx={i}"),
+                );
             }
         }
         if caps.neon {
             let got = matrix_multiply_neon(&a, &b, m, k, n).unwrap();
             for i in 0..m * n {
-                assert_rel_eq(reference[i], got[i], 1e-4, &format!("matmul neon {m}x{k}x{n} idx={i}"));
+                assert_rel_eq(
+                    reference[i],
+                    got[i],
+                    1e-4,
+                    &format!("matmul neon {m}x{k}x{n} idx={i}"),
+                );
             }
         }
         let auto = matrix_multiply(&a, &b, m, k, n).unwrap();
         for i in 0..m * n {
-            assert_rel_eq(reference[i], auto[i], 1e-4, &format!("matmul auto {m}x{k}x{n} idx={i}"));
+            assert_rel_eq(
+                reference[i],
+                auto[i],
+                1e-4,
+                &format!("matmul auto {m}x{k}x{n} idx={i}"),
+            );
         }
     }
 }
@@ -347,5 +425,9 @@ fn conv2d_reference_known_answer() {
     let out = conv2d(&input, 3, 3, &kernel, 2).unwrap();
     assert_eq!(out, vec![12.0, 16.0, 24.0, 28.0]);
     let exec = conv2d_ex(&input, 3, 3, &kernel, 2).unwrap();
-    assert_eq!(exec.backend, KernelBackend::Scalar, "conv2d is scalar-only and must say so");
+    assert_eq!(
+        exec.backend,
+        KernelBackend::Scalar,
+        "conv2d is scalar-only and must say so"
+    );
 }

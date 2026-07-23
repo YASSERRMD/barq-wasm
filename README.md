@@ -46,6 +46,29 @@ No capability is claimed below unless it is implemented, tested, and verified.
 Verified by 16 runtime integration tests over real WAT fixtures plus 9
 end-to-end CLI tests (`tests/runtime_integration.rs`, `tests/cli.rs`).
 
+**Native SIMD kernels** (`src/kernels`): explicit AVX2/AVX2+FMA (x86-64) and
+NEON (ARM64) implementations of dot product, L2 norm, cosine similarity, INT8
+quantize/dequantize, and matrix multiply, with scalar references as ground
+truth.
+
+- Runtime CPU detection (`is_x86_feature_detected!` /
+  `is_aarch64_feature_detected!`, cached once). Safe wrappers refuse to run on
+  unsupported CPUs with typed errors. `BARQ_FORCE_KERNEL=scalar|avx2|avx2-fma|neon`
+  forces a backend for testing; forcing an unsupported one is an error, never
+  an illegal instruction.
+- Auto-dispatch entry points (`dot_product`, `quantize_i8`, ...) report which
+  backend actually ran (`KernelExecution { value, backend }`). conv2d is
+  scalar-only and reports exactly that.
+- Quantization semantics are defined (IEEE round-to-nearest-even, saturating,
+  NaN→0) and the differential tests require **bit-identical** output across
+  scalar, AVX2, and NEON.
+- `scripts/verify-native-simd.sh` disassembles the release build and fails
+  unless real SIMD instructions are present (`vmulps`/`vfmadd`/`ymm` on
+  x86-64; `fmla`/`.4s` on ARM64). Wired into CI.
+- Verified by differential tests over boundary lengths (empty, 1, below/at/
+  above vector width, 10k+), sign/zero/NaN/infinity policies, misaligned
+  slices, and property-based randomized tests.
+
 **Scalar compute kernels** (`src/wasm_bindings.rs`), exposed to JavaScript via
 `wasm-bindgen` and usable natively:
 
@@ -71,7 +94,6 @@ These are planned phases, not features:
 
 | Planned capability | Phase |
 |---|---|
-| Native SIMD kernels (x86-64 AVX2/FMA, ARM64 NEON) with runtime CPU detection and disassembly verification | 3 |
 | Browser WASM SIMD128 kernels with separate scalar/simd bundles and binary instruction verification | 4 |
 | Structural WASM pattern analysis (parsed modules, evidence-based confidence) | 5 |
 | Safe specialization (host-kernel imports, narrowly-scoped Cranelift JIT) | 6 |

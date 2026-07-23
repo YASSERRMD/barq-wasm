@@ -1,6 +1,6 @@
 {
   "$comment": "Machine-readable capability status. Every advertised capability must appear here. 'implemented' requires implementation + correctness tests + verification; anything less is 'partial' or 'absent'. Checked in CI.",
-  "updated_for_phase": 2,
+  "updated_for_phase": 3,
   "capabilities": [
     {
       "capability": "native WebAssembly module execution (validate/load/instantiate/invoke)",
@@ -23,20 +23,41 @@
       "notes": "Backed by Wasmtime, not a from-scratch engine. Fuel/timeout are opt-in via RuntimeConfig."
     },
     {
-      "capability": "native AVX2 dot product",
-      "status": "absent",
-      "implementation_files": [],
-      "correctness_tests": [],
+      "capability": "native AVX2/FMA kernels (dot product, L2 norm, cosine, quantize, dequantize, matmul)",
+      "status": "implemented",
+      "implementation_files": [
+        "src/kernels/x86/avx2.rs",
+        "src/kernels/mod.rs"
+      ],
+      "correctness_tests": [
+        "tests/kernel_differential.rs (differential vs scalar, executed on AVX2 hosts e.g. CI x86-64)",
+        "tests/kernel_property.rs (randomized property tests)",
+        "tests/kernel_force_env.rs (BARQ_FORCE_KERNEL honored/refused)"
+      ],
       "benchmarks": [],
-      "verification": []
+      "verification": [
+        "scripts/verify-native-simd.sh asserts vmulps/vaddps/vfmadd/ymm in emitted x86-64 assembly (CI step)",
+        "Runtime detection via is_x86_feature_detected; safe wrappers refuse unsupported CPUs with typed errors"
+      ],
+      "notes": "Executed and differentially tested on x86-64 CI runners; on non-AVX2 hosts the same tests verify typed-error refusal."
     },
     {
-      "capability": "native NEON dot product",
-      "status": "absent",
-      "implementation_files": [],
-      "correctness_tests": [],
+      "capability": "native NEON kernels (dot product, L2 norm, cosine, quantize, dequantize, matmul)",
+      "status": "implemented",
+      "implementation_files": [
+        "src/kernels/arm/neon.rs",
+        "src/kernels/mod.rs"
+      ],
+      "correctness_tests": [
+        "tests/kernel_differential.rs (differential vs scalar, executed on aarch64)",
+        "tests/kernel_property.rs",
+        "tests/kernel_force_env.rs"
+      ],
       "benchmarks": [],
-      "verification": []
+      "verification": [
+        "scripts/verify-native-simd.sh asserts fmla/ld1/.4s in emitted aarch64 assembly (verified on Apple M4)",
+        "Runtime detection via is_aarch64_feature_detected"
+      ]
     },
     {
       "capability": "browser WASM SIMD128 kernels",
@@ -48,11 +69,18 @@
     },
     {
       "capability": "runtime CPU feature detection",
-      "status": "absent",
-      "implementation_files": [],
-      "correctness_tests": [],
+      "status": "implemented",
+      "implementation_files": [
+        "src/kernels/dispatch.rs"
+      ],
+      "correctness_tests": [
+        "tests/kernel_force_env.rs",
+        "tests/kernel_differential.rs::at_least_one_simd_backend_runs_on_supported_hosts"
+      ],
       "benchmarks": [],
-      "verification": []
+      "verification": [
+        "OnceLock-cached is_x86_feature_detected!/is_aarch64_feature_detected!; BARQ_FORCE_KERNEL override returns typed error for unsupported backends"
+      ]
     },
     {
       "capability": "structural WASM pattern analysis",
@@ -81,13 +109,17 @@
     {
       "capability": "scalar compute kernels (dot product, L2 norm, cosine similarity, matrix multiply, conv2d, quantization, elementwise ops, statistics)",
       "status": "partial",
-      "implementation_files": ["src/wasm_bindings.rs"],
+      "implementation_files": [
+        "src/wasm_bindings.rs",
+        "src/kernels/scalar.rs"
+      ],
       "correctness_tests": [
         "tests/truth_baseline.rs::dot_product_unrolled_matches_scalar",
         "tests/truth_baseline.rs::vector_norm_unrolled_matches_scalar",
         "tests/truth_baseline.rs::cosine_similarity_unrolled_matches_scalar",
         "tests/truth_baseline.rs::quantize_unrolled_matches_scalar",
-        "tests/truth_baseline.rs::matrix_multiply_tiled_matches_scalar"
+        "tests/truth_baseline.rs::matrix_multiply_tiled_matches_scalar",
+        "tests/kernel_differential.rs (scalar references are the ground truth)"
       ],
       "benchmarks": [],
       "verification": [
@@ -98,13 +130,39 @@
     {
       "capability": "LZ4 compression",
       "status": "partial",
-      "implementation_files": ["src/wasm_bindings.rs"],
+      "implementation_files": [
+        "src/wasm_bindings.rs"
+      ],
       "correctness_tests": [
         "tests/truth_baseline.rs::lz4_experimental_small_input_is_verbatim_copy"
       ],
       "benchmarks": [],
       "verification": [],
       "notes": "lz4_compress_experimental returns input verbatim under 128 KiB and emits an unvalidated LZ4-like format above; no decompressor, no format conformance test."
+    },
+    {
+      "capability": "native conv2d SIMD",
+      "status": "absent",
+      "implementation_files": [
+        "src/kernels/scalar.rs (scalar reference only)"
+      ],
+      "correctness_tests": [
+        "tests/kernel_differential.rs::conv2d_reference_known_answer"
+      ],
+      "benchmarks": [],
+      "verification": [
+        "conv2d_ex reports KernelBackend::Scalar truthfully"
+      ],
+      "notes": "conv2d dispatch never claims SIMD; a vectorized conv2d is future work."
+    },
+    {
+      "capability": "native AVX-512 kernels",
+      "status": "absent",
+      "implementation_files": [],
+      "correctness_tests": [],
+      "benchmarks": [],
+      "verification": [],
+      "notes": "avx512f is detected and reported but no AVX-512 kernel exists."
     }
   ]
 }
