@@ -138,21 +138,36 @@ Correctness is enforced by differential tests against naive scalar references
 `BarqError::UnsupportedFeature`; the CLI exits non-zero. Nothing prints success
 without executing real work.
 
-## What does not exist yet (planned)
+## What does not exist yet
 
-These are planned phases, not features:
-
-| Planned capability | Phase |
-|---|---|
-| Reproducible benchmarks with recorded environment and correctness gates | 7 |
+- Automatic substitution of analyzer-detected patterns (opt-in ABI only).
+- SIMD conv2d and AVX-512 kernels (detected but unimplemented; conv2d reports
+  scalar truthfully).
+- Syscall bypass / "adaptive syscall mapping" — never existed, still absent.
 
 ## Benchmarks
 
-There are currently **no published benchmark numbers**. Previous README tables
-were produced by ad-hoc browser pages and synthetic sleep-based benchmarks and
-have been removed. Reproducible benchmarks with recorded methodology,
-environment metadata, and correctness verification are Phase 7 scope; published
-tables will be generated from checked-in benchmark JSON only.
+Reproducible benchmarks live in three places, all correctness-gated (a result
+is verified against the scalar reference **before** any timing; an incorrect
+implementation gets no timing at all):
+
+- `cargo run --release --features bench-tool --bin barq-bench` — native
+  harness with warm-up, median/p90/p95/stddev, size sweep (15 → 1 000 000;
+  matrices 16 → 256), and embedded environment metadata (OS, CPU, detected
+  features, selected backend, git commit). Exits non-zero on any incorrect
+  result.
+- `cargo bench` — Criterion benchmarks over the same kernels with the same
+  correctness gates.
+- `docs/browser/benchmark.html` — browser harness comparing a JS baseline
+  against wasm scalar / unrolled / SIMD128 with identical warm-up and sample
+  counts on identical data.
+
+Checked-in raw results: [`benchmarks/results/`](benchmarks/results/)
+(currently one Apple M4 / macOS run; every record carries `correct: true`
+and full stats). `tests/bench_integrity.rs` validates every checked-in file
+in CI and rejects sleeps or fabricated durations in benchmark sources. No
+speedup claims are published in prose — read the JSON, which names the
+hardware it came from.
 
 ## Installation
 
