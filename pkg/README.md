@@ -27,6 +27,25 @@ No capability is claimed below unless it is implemented, tested, and verified.
 
 ## What works today (verified)
 
+**Real WebAssembly execution** (`src/runtime`, Wasmtime-backed):
+
+- Module validation, loading (`.wasm` and `.wat`), instantiation, typed and
+  dynamically-typed invocation with concrete-value tests.
+- Linear memory read/write from host and guest, with typed out-of-bounds
+  errors.
+- WASI preview1 (optionally with captured stdout/stderr), fuel limits with
+  consumption reporting, wall-clock deadlines via epoch interruption, and
+  guest memory limits.
+- Traps (unreachable, division by zero, out-of-fuel, interrupt) map to typed
+  `BarqError` variants.
+- CLI: `barq-wasm validate|inspect|run|benchmark`. Example:
+  `barq-wasm run fixtures/add.wasm --invoke add --arg-i32 20 --arg-i32 22`
+  prints `42`. The `benchmark` subcommand refuses to publish timings if
+  results are non-deterministic across iterations.
+
+Verified by 16 runtime integration tests over real WAT fixtures plus 9
+end-to-end CLI tests (`tests/runtime_integration.rs`, `tests/cli.rs`).
+
 **Scalar compute kernels** (`src/wasm_bindings.rs`), exposed to JavaScript via
 `wasm-bindgen` and usable natively:
 
@@ -52,7 +71,6 @@ These are planned phases, not features:
 
 | Planned capability | Phase |
 |---|---|
-| Real WebAssembly execution (Wasmtime-backed: validate, instantiate, invoke, WASI, fuel) | 2 |
 | Native SIMD kernels (x86-64 AVX2/FMA, ARM64 NEON) with runtime CPU detection and disassembly verification | 3 |
 | Browser WASM SIMD128 kernels with separate scalar/simd bundles and binary instruction verification | 4 |
 | Structural WASM pattern analysis (parsed modules, evidence-based confidence) | 5 |
@@ -95,11 +113,15 @@ exported kernels are scalar; see [docs/WASM.md](docs/WASM.md).
 ### CLI
 
 ```bash
-./target/release/barq-wasm --file module.wasm
+./target/release/barq-wasm validate module.wasm
+./target/release/barq-wasm inspect module.wasm
+./target/release/barq-wasm run module.wasm --invoke add --arg-i32 20 --arg-i32 22
+./target/release/barq-wasm benchmark module.wasm --invoke f --iterations 100
 ```
 
-Currently exits with an error: module execution is not implemented until
-Phase 2. The CLI will never report success without executing the module.
+Optional execution guards: `--fuel N`, `--timeout-ms N`, `--max-memory BYTES`,
+`--no-wasi`. The CLI exits non-zero on any failure and never reports success
+without executing the module.
 
 ## Contributing
 
