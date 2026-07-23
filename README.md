@@ -140,11 +140,12 @@ cargo test
 ### Building for the browser
 
 ```bash
-wasm-pack build --target web --features wasm
+./scripts/build-browser-bundles.sh   # pkg/scalar + pkg/simd
+./scripts/verify-wasm-simd.sh        # verify instruction content
 ```
 
-This produces a `pkg/` directory with the WASM binary and JavaScript glue. All
-exported kernels are scalar; see [docs/WASM.md](docs/WASM.md).
+See [docs/WASM.md](docs/WASM.md) for the API and
+[docs/browser/loader.js](docs/browser/loader.js) for feature-detected loading.
 
 ### CLI
 
