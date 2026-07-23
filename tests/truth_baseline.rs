@@ -1,6 +1,8 @@
 //! Truth-baseline tests: the renamed scalar kernels compute correct results
 //! against naive scalar references.
 
+#![cfg(not(target_arch = "wasm32"))]
+
 use barq_wasm::wasm_bindings::*;
 
 // ---------------------------------------------------------------------------

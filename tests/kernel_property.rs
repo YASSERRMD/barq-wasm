@@ -1,6 +1,8 @@
 //! Property-based tests: randomized lengths, values, and scales, comparing
 //! every available SIMD backend against the scalar reference.
 
+#![cfg(not(target_arch = "wasm32"))]
+
 use barq_wasm::kernels::*;
 use proptest::prelude::*;
 
