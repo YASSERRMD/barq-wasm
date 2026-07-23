@@ -101,6 +101,24 @@ facts (load/store address expressions, accumulators, induction variables).
 - Detection only: nothing is substituted or accelerated by the analyzer
   (that is Phase 6, with differential safety tests).
 
+**Safe specialization** (`src/runtime/barq_abi.rs`, `src/jit/`):
+
+- *Host-kernel ABI*: guests that import `barq.dot_product_f32`,
+  `barq.l2_norm_f32`, `barq.cosine_similarity_f32`, or `barq.quantize_i8` get
+  the crate's verified native kernels (AVX2/FMA, NEON, or scalar via the same
+  dispatch). Opt-in only — nothing is silently rewritten. Bounds and
+  alignment are validated; violations trap as typed errors. Differentially
+  tested: host result vs a pure-guest scalar loop vs the native reference on
+  identical guest memory; quantization output is bit-exact.
+- *Cranelift JIT* (`jit-specialization` feature): compiles complete IR
+  functions for narrow signatures (f32 dot product with a real loop; i64
+  add), resolves callable pointers, executes through length-validated typed
+  wrappers, and frees executable memory safely on drop. Differentially
+  tested against scalar references including 200 randomized lengths. There
+  is deliberately no test that merely checks machine code is non-empty.
+- Automatic substitution of analyzer-detected patterns is **not** performed;
+  `barq-wasm analyze` only points at the opt-in ABI.
+
 **Scalar compute kernels** (`src/wasm_bindings.rs`), exposed to JavaScript via
 `wasm-bindgen` and usable natively:
 
@@ -126,7 +144,6 @@ These are planned phases, not features:
 
 | Planned capability | Phase |
 |---|---|
-| Safe specialization (host-kernel imports, narrowly-scoped Cranelift JIT) | 6 |
 | Reproducible benchmarks with recorded environment and correctness gates | 7 |
 
 ## Benchmarks
