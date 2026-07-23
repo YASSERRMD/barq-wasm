@@ -1,4 +1,5 @@
 pub mod error;
+pub mod kernels;
 #[cfg(feature = "native-runtime")]
 pub mod runtime;
 pub mod wasm_bindings;
