@@ -4,6 +4,8 @@
 //! environment variables; cargo runs separate test binaries serially, so no
 //! other kernel test can observe the override mid-flight.
 
+#![cfg(not(target_arch = "wasm32"))]
+
 use barq_wasm::error::BarqError;
 use barq_wasm::kernels::*;
 

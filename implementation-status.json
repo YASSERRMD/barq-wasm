@@ -1,6 +1,6 @@
 {
   "$comment": "Machine-readable capability status. Every advertised capability must appear here. 'implemented' requires implementation + correctness tests + verification; anything less is 'partial' or 'absent'. Checked in CI.",
-  "updated_for_phase": 3,
+  "updated_for_phase": 4,
   "capabilities": [
     {
       "capability": "native WebAssembly module execution (validate/load/instantiate/invoke)",
@@ -61,11 +61,20 @@
     },
     {
       "capability": "browser WASM SIMD128 kernels",
-      "status": "absent",
-      "implementation_files": [],
-      "correctness_tests": [],
+      "status": "implemented",
+      "implementation_files": [
+        "src/kernels/wasm32/simd128.rs",
+        "src/wasm_bindings.rs"
+      ],
+      "correctness_tests": [
+        "tests/browser.rs (10 headless-Chrome tests with simd128: differential dot/norm/cosine, bit-exact quantize incl. NaN/inf/ties, dequantize, elementwise, repeated invocation, 500k-element transfer; 3 tests in scalar configuration)"
+      ],
       "benchmarks": [],
-      "verification": []
+      "verification": [
+        "scripts/verify-wasm-simd.sh: simd bundle must contain v128.load/f32x4.mul/f32x4.add/i32x4.trunc_sat_f32x4_s and *_simd128 exports; scalar bundle must contain zero SIMD ops and no *_simd128 exports (checked with the wasmparser-based wasm-inspect binary)",
+        "docs/browser/loader.js feature-detects SIMD before loading and cross-checks simd128_enabled()"
+      ],
+      "notes": "Two bundles: pkg/scalar and pkg/simd. Firefox headless run wired in CI."
     },
     {
       "capability": "runtime CPU feature detection",

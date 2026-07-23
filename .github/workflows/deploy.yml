@@ -19,13 +19,17 @@ jobs:
       - name: Install wasm-pack
         run: curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
 
-      - name: Build WASM
-        run: wasm-pack build --target web --features wasm --no-default-features
+      - name: Build WASM bundles (scalar + simd)
+        run: ./scripts/build-browser-bundles.sh
+
+      - name: Verify SIMD instruction content before deploying
+        run: SKIP_BUILD=1 ./scripts/verify-wasm-simd.sh
 
       - name: Prepare Deployment
         run: |
           mkdir -p public
           cp -r pkg public/
+          cp -r docs/browser public/browser
           find public -name ".gitignore" -delete
           cat > public/index.html <<'EOF'
           <!DOCTYPE html>

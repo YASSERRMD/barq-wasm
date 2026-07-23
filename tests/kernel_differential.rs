@@ -6,6 +6,8 @@
 //! whatever the host CPU supports; unsupported backends must return typed
 //! errors, never wrong results.
 
+#![cfg(not(target_arch = "wasm32"))]
+
 use barq_wasm::error::BarqError;
 use barq_wasm::kernels::*;
 
