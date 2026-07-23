@@ -214,10 +214,9 @@ fn collect_args(sub: &clap::ArgMatches) -> Result<Vec<WasmValue>, String> {
     let mut ordered: Vec<(usize, WasmValue)> = Vec::new();
     macro_rules! gather {
         ($flag:literal, $ty:ty, $variant:ident) => {
-            if let (Some(values), Some(indices)) = (
-                sub.get_many::<String>($flag),
-                sub.indices_of($flag),
-            ) {
+            if let (Some(values), Some(indices)) =
+                (sub.get_many::<String>($flag), sub.indices_of($flag))
+            {
                 for (raw, idx) in values.zip(indices) {
                     let parsed: $ty = raw
                         .parse()
@@ -255,8 +254,7 @@ fn prepare(sub: &clap::ArgMatches) -> Result<(Runtime, String, Vec<WasmValue>), 
         config.timeout = Some(Duration::from_millis(ms));
     }
     if let Some(bytes) = sub.get_one::<String>("max-memory") {
-        config.max_memory_bytes =
-            Some(bytes.parse().map_err(|_| "--max-memory must be a number")?);
+        config.max_memory_bytes = Some(bytes.parse().map_err(|_| "--max-memory must be a number")?);
     }
 
     let mut runtime = Runtime::new(config).map_err(stringify)?;

@@ -145,13 +145,13 @@ impl Runtime {
                 .set_fuel(fuel)
                 .map_err(|e| BarqError::RuntimeNotInitialized(e.to_string()))?;
         }
-        let instance = self
-            .linker
-            .instantiate(&mut self.store, module)
-            .map_err(|e| match map_wasmtime_error(&e, &mut self.store, self.config.fuel) {
-                Some(mapped) => mapped,
-                None => BarqError::Instantiation(format!("{e:#}")),
-            })?;
+        let instance =
+            self.linker.instantiate(&mut self.store, module).map_err(
+                |e| match map_wasmtime_error(&e, &mut self.store, self.config.fuel) {
+                    Some(mapped) => mapped,
+                    None => BarqError::Instantiation(format!("{e:#}")),
+                },
+            )?;
         self.instance = Some(instance);
         Ok(())
     }
@@ -183,12 +183,13 @@ impl Runtime {
         let instance = self.instance.ok_or_else(|| {
             BarqError::ModuleNotLoaded("call instantiate before invoking".to_string())
         })?;
-        let func = instance.get_func(&mut self.store, name).ok_or_else(|| {
-            BarqError::MissingExport {
-                name: name.to_string(),
-                reason: "no function export with this name".to_string(),
-            }
-        })?;
+        let func =
+            instance
+                .get_func(&mut self.store, name)
+                .ok_or_else(|| BarqError::MissingExport {
+                    name: name.to_string(),
+                    reason: "no function export with this name".to_string(),
+                })?;
         let ty = func.ty(&self.store);
         let expected: Vec<_> = ty.params().collect();
         if expected.len() != args.len() {
@@ -308,7 +309,11 @@ impl Runtime {
         match map_wasmtime_error(&error, &mut self.store, self.config.fuel) {
             Some(BarqError::Trap(msg)) if timed_out => {
                 // Epoch interruption surfaces as an Interrupt trap.
-                let millis = self.config.timeout.map(|t| t.as_millis() as u64).unwrap_or(0);
+                let millis = self
+                    .config
+                    .timeout
+                    .map(|t| t.as_millis() as u64)
+                    .unwrap_or(0);
                 if msg.contains("interrupt") {
                     BarqError::Timeout { millis }
                 } else {
