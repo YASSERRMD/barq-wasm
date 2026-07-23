@@ -25,6 +25,32 @@ now is:
 
 No capability is claimed below unless it is implemented, tested, and verified.
 
+<!-- BEGIN GENERATED: capability-summary (scripts/generate-docs.py) -->
+
+### Capability summary (generated)
+
+9 implemented · 2 partial · 3 absent — full detail in [docs/STATUS.md](docs/STATUS.md),
+measured numbers in [docs/BENCHMARKS.md](docs/BENCHMARKS.md).
+
+| Capability | Status |
+|---|---|
+| browser WASM SIMD128 kernels | implemented |
+| native AVX2/FMA kernels (dot product, L2 norm, cosine, quantize, dequantize, matmul) | implemented |
+| native NEON kernels (dot product, L2 norm, cosine, quantize, dequantize, matmul) | implemented |
+| native WebAssembly module execution (validate/load/instantiate/invoke) | implemented |
+| reproducible benchmarks (native harness + criterion + browser page) | implemented |
+| runtime CPU feature detection | implemented |
+| specialization: barq host-kernel ABI + Cranelift JIT (narrow signatures) | implemented |
+| structural WASM pattern analysis | implemented |
+| verification-driven CI and acceptance command | implemented |
+| LZ4 compression | partial |
+| scalar compute kernels (dot product, L2 norm, cosine similarity, matrix multiply, conv2d, quantization, elementwise ops, statistics) | partial |
+| native AVX-512 kernels | absent |
+| native conv2d SIMD | absent |
+| syscall bypass / adaptive syscall mapping | absent |
+
+<!-- END GENERATED: capability-summary -->
+
 ## What works today (verified)
 
 **Real WebAssembly execution** (`src/runtime`, Wasmtime-backed):
@@ -221,6 +247,15 @@ and any FAIL exits non-zero. CI additionally runs the truthfulness gate
 (`scripts/check-truthfulness.sh`), a Linux/macOS/Windows test matrix, release
 SIMD verification on both architectures, browser tests in Chrome and Firefox,
 an MSRV check, and non-blocking cargo-audit and AddressSanitizer jobs.
+
+## Versioning
+
+The crate is `0.6.x` and stays pre-1.0 deliberately, following the ladder:
+truthful kernels (0.1) → real runtime (0.2) → verified native SIMD (0.3) →
+verified WASM SIMD (0.4) → structural analysis (0.5) → safe specialization
+(0.6). `1.0.0` requires stable APIs and reproducible guarantees; nothing here
+claims that yet. There is no Stable tier in the docs — every working
+capability is Experimental by policy until then.
 
 ## Contributing
 
