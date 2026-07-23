@@ -5,6 +5,7 @@
 //! deadlines, and memory limits. Traps are mapped to typed [`BarqError`]
 //! variants.
 
+pub mod barq_abi;
 mod config;
 mod value;
 
@@ -107,6 +108,9 @@ impl Runtime {
         if config.enable_wasi {
             wasmtime_wasi::preview1::add_to_linker_sync(&mut linker, |state| &mut state.wasi)
                 .map_err(|e| BarqError::RuntimeNotInitialized(e.to_string()))?;
+        }
+        if config.enable_barq_abi {
+            barq_abi::add_to_linker(&mut linker)?;
         }
 
         Ok(Self {

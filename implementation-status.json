@@ -1,6 +1,6 @@
 {
   "$comment": "Machine-readable capability status. Every advertised capability must appear here. 'implemented' requires implementation + correctness tests + verification; anything less is 'partial' or 'absent'. Checked in CI.",
-  "updated_for_phase": 5,
+  "updated_for_phase": 6,
   "capabilities": [
     {
       "capability": "native WebAssembly module execution (validate/load/instantiate/invoke)",
@@ -111,12 +111,22 @@
       "notes": "Detects dot product, matrix multiply, and quantization candidates. Detection only \u2014 no execution substitution until Phase 6."
     },
     {
-      "capability": "pattern-based specialization / JIT",
-      "status": "absent",
-      "implementation_files": [],
-      "correctness_tests": [],
+      "capability": "specialization: barq host-kernel ABI + Cranelift JIT (narrow signatures)",
+      "status": "implemented",
+      "implementation_files": [
+        "src/runtime/barq_abi.rs",
+        "src/jit/mod.rs"
+      ],
+      "correctness_tests": [
+        "tests/specialization_tests.rs (6 tests: host vs pure-guest vs native differential, bit-exact quantize into guest memory, OOB and misalignment traps, ABI-disabled instantiation failure)",
+        "tests/jit_tests.rs (5 tests: compiled dot product vs scalar across lengths, 200-case randomized lengths, typed errors, multi-instance memory safety)"
+      ],
       "benchmarks": [],
-      "verification": []
+      "verification": [
+        "Host kernels route through the same verified dispatch (AVX2/FMA, NEON, scalar); guests opt in by importing the barq module \u2014 nothing is silently rewritten",
+        "JIT builds complete Cranelift IR functions (loop with block params), finalizes real executable memory, typed wrappers validate lengths; no test asserts machine_code.len() > 0"
+      ],
+      "notes": "Automatic substitution of detected patterns is intentionally NOT implemented; analyzer output only recommends the opt-in ABI."
     },
     {
       "capability": "syscall bypass / adaptive syscall mapping",

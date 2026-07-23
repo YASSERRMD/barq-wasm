@@ -7,6 +7,9 @@ use std::time::Duration;
 pub struct RuntimeConfig {
     /// Link WASI preview1 imports (`wasi_snapshot_preview1`).
     pub enable_wasi: bool,
+    /// Link the `barq` host-kernel ABI (opt-in acceleration for guests that
+    /// import it; see [`crate::runtime::barq_abi`]).
+    pub enable_barq_abi: bool,
     /// Inherit the host's stdout/stderr for WASI programs. When false, WASI
     /// output is captured in memory and retrievable via
     /// [`crate::runtime::Runtime::take_wasi_output`].
@@ -26,6 +29,7 @@ impl Default for RuntimeConfig {
     fn default() -> Self {
         Self {
             enable_wasi: true,
+            enable_barq_abi: true,
             inherit_stdio: true,
             wasi_args: vec!["module".to_string()],
             fuel: None,

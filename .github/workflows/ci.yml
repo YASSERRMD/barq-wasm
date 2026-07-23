@@ -20,8 +20,10 @@ jobs:
       run: cargo clippy --all-targets --all-features -- -D warnings
     - name: Build
       run: cargo build --verbose
-    - name: Run tests
+    - name: Run tests (default features)
       run: cargo test --verbose
+    - name: Run tests (all features, incl. JIT specialization)
+      run: cargo test --all-features --verbose
     - name: Validate implementation-status.json
       run: python3 -c "import json; json.load(open('implementation-status.json'))"
     - name: Verify native SIMD instructions in assembly
