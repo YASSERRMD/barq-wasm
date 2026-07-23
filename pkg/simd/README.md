@@ -208,6 +208,20 @@ Optional execution guards: `--fuel N`, `--timeout-ms N`, `--max-memory BYTES`,
 `--no-wasi`. The CLI exits non-zero on any failure and never reports success
 without executing the module.
 
+### Verifying everything
+
+```bash
+cargo xtask verify-all                 # every layer this host can run
+cargo xtask verify-all --with-browser  # + headless Chrome tests
+```
+
+Produces `verification-report.json` and `verification-report.md`. Every step
+ends PASS, FAIL, or NOT RUN with the reason — NOT RUN is never shown as PASS,
+and any FAIL exits non-zero. CI additionally runs the truthfulness gate
+(`scripts/check-truthfulness.sh`), a Linux/macOS/Windows test matrix, release
+SIMD verification on both architectures, browser tests in Chrome and Firefox,
+an MSRV check, and non-blocking cargo-audit and AddressSanitizer jobs.
+
 ## Contributing
 
 Contributions are welcome. Ground rules for this codebase:
