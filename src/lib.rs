@@ -1,5 +1,6 @@
 pub mod error;
-pub mod executor;
+#[cfg(feature = "native-runtime")]
+pub mod runtime;
 pub mod wasm_bindings;
 
 pub use error::{BarqError, BarqResult};
