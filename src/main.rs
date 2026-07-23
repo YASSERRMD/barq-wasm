@@ -158,6 +158,18 @@ fn real_main() -> Result<(), String> {
                 for e in &candidate.evidence {
                     println!("  evidence: {} — {}", e.feature, e.detail);
                 }
+                let suggestion = match candidate.pattern {
+                    barq_wasm::analyzer::PatternKind::DotProduct => {
+                        Some("barq.dot_product_f32 host-kernel import")
+                    }
+                    barq_wasm::analyzer::PatternKind::Quantization => {
+                        Some("barq.quantize_i8 host-kernel import")
+                    }
+                    barq_wasm::analyzer::PatternKind::MatrixMultiply => None,
+                };
+                if let Some(s) = suggestion {
+                    println!("  available acceleration: {s} (opt-in; see src/runtime/barq_abi.rs)");
+                }
             }
             if !any {
                 println!("no pattern candidates detected");
