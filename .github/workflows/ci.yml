@@ -24,3 +24,7 @@ jobs:
       run: cargo test --verbose
     - name: Validate implementation-status.json
       run: python3 -c "import json; json.load(open('implementation-status.json'))"
+    - name: Verify native SIMD instructions in assembly
+      run: ./scripts/verify-native-simd.sh
+    - name: Report selected kernel backend
+      run: cargo test --release --test kernel_differential -- --nocapture at_least_one_simd_backend
