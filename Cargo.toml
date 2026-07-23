@@ -31,3 +31,4 @@ getrandom = { version = "0.2", optional = true }
 [dev-dependencies]
 pretty_assertions = "1.0"
 wat = "1.0"
+proptest = "1.4"
