@@ -1,0 +1,103 @@
+{
+  "$comment": "Machine-readable capability status. Every advertised capability must appear here. 'implemented' requires implementation + correctness tests + verification; anything less is 'partial' or 'absent'. Checked in CI.",
+  "updated_for_phase": 1,
+  "capabilities": [
+    {
+      "capability": "native WebAssembly module execution (validate/load/instantiate/invoke)",
+      "status": "absent",
+      "implementation_files": [],
+      "correctness_tests": [
+        "tests/truth_baseline.rs::runtime_construction_fails_with_typed_error",
+        "tests/truth_baseline.rs::cli_exits_nonzero_when_execution_unavailable"
+      ],
+      "benchmarks": [],
+      "verification": [
+        "Runtime construction returns BarqError::UnsupportedFeature; CLI exits non-zero"
+      ]
+    },
+    {
+      "capability": "native AVX2 dot product",
+      "status": "absent",
+      "implementation_files": [],
+      "correctness_tests": [],
+      "benchmarks": [],
+      "verification": []
+    },
+    {
+      "capability": "native NEON dot product",
+      "status": "absent",
+      "implementation_files": [],
+      "correctness_tests": [],
+      "benchmarks": [],
+      "verification": []
+    },
+    {
+      "capability": "browser WASM SIMD128 kernels",
+      "status": "absent",
+      "implementation_files": [],
+      "correctness_tests": [],
+      "benchmarks": [],
+      "verification": []
+    },
+    {
+      "capability": "runtime CPU feature detection",
+      "status": "absent",
+      "implementation_files": [],
+      "correctness_tests": [],
+      "benchmarks": [],
+      "verification": []
+    },
+    {
+      "capability": "structural WASM pattern analysis",
+      "status": "absent",
+      "implementation_files": [],
+      "correctness_tests": [],
+      "benchmarks": [],
+      "verification": []
+    },
+    {
+      "capability": "pattern-based specialization / JIT",
+      "status": "absent",
+      "implementation_files": [],
+      "correctness_tests": [],
+      "benchmarks": [],
+      "verification": []
+    },
+    {
+      "capability": "syscall bypass / adaptive syscall mapping",
+      "status": "absent",
+      "implementation_files": [],
+      "correctness_tests": [],
+      "benchmarks": [],
+      "verification": []
+    },
+    {
+      "capability": "scalar compute kernels (dot product, L2 norm, cosine similarity, matrix multiply, conv2d, quantization, elementwise ops, statistics)",
+      "status": "partial",
+      "implementation_files": ["src/wasm_bindings.rs"],
+      "correctness_tests": [
+        "tests/truth_baseline.rs::dot_product_unrolled_matches_scalar",
+        "tests/truth_baseline.rs::vector_norm_unrolled_matches_scalar",
+        "tests/truth_baseline.rs::cosine_similarity_unrolled_matches_scalar",
+        "tests/truth_baseline.rs::quantize_unrolled_matches_scalar",
+        "tests/truth_baseline.rs::matrix_multiply_tiled_matches_scalar"
+      ],
+      "benchmarks": [],
+      "verification": [
+        "Differential tests against naive scalar references; no SIMD or auto-vectorization claims made"
+      ],
+      "notes": "Partial because not every exported function has a dedicated test yet and no reproducible benchmarks exist."
+    },
+    {
+      "capability": "LZ4 compression",
+      "status": "partial",
+      "implementation_files": ["src/wasm_bindings.rs"],
+      "correctness_tests": [
+        "tests/truth_baseline.rs::lz4_experimental_small_input_is_verbatim_copy"
+      ],
+      "benchmarks": [],
+      "verification": [],
+      "notes": "lz4_compress_experimental returns input verbatim under 128 KiB and emits an unvalidated LZ4-like format above; no decompressor, no format conformance test."
+    }
+  ]
+}
