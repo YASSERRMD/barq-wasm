@@ -28,6 +28,12 @@ jobs:
       run: python3 -c "import json; json.load(open('implementation-status.json'))"
     - name: Verify native SIMD instructions in assembly
       run: ./scripts/verify-native-simd.sh
+    - name: Benchmark integrity (correctness gates, no sleeps, valid checked-in JSON)
+      run: cargo test --features bench-tool --test bench_integrity
+    - name: Benchmark smoke run (real work, quick settings)
+      run: cargo run --release --features bench-tool --bin barq-bench -- --quick --out /tmp/bench-smoke.json
+    - name: Criterion benches compile
+      run: cargo bench --no-run
     - name: Report selected kernel backend
       run: cargo test --release --test kernel_differential -- --nocapture at_least_one_simd_backend
 

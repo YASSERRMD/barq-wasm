@@ -1,6 +1,6 @@
 {
   "$comment": "Machine-readable capability status. Every advertised capability must appear here. 'implemented' requires implementation + correctness tests + verification; anything less is 'partial' or 'absent'. Checked in CI.",
-  "updated_for_phase": 6,
+  "updated_for_phase": 7,
   "capabilities": [
     {
       "capability": "native WebAssembly module execution (validate/load/instantiate/invoke)",
@@ -34,7 +34,9 @@
         "tests/kernel_property.rs (randomized property tests)",
         "tests/kernel_force_env.rs (BARQ_FORCE_KERNEL honored/refused)"
       ],
-      "benchmarks": [],
+      "benchmarks": [
+        "run scripts: cargo run --release --features bench-tool --bin barq-bench on an AVX2 host; no curated x86 result file is checked in yet"
+      ],
       "verification": [
         "scripts/verify-native-simd.sh asserts vmulps/vaddps/vfmadd/ymm in emitted x86-64 assembly (CI step)",
         "Runtime detection via is_x86_feature_detected; safe wrappers refuse unsupported CPUs with typed errors"
@@ -53,7 +55,9 @@
         "tests/kernel_property.rs",
         "tests/kernel_force_env.rs"
       ],
-      "benchmarks": [],
+      "benchmarks": [
+        "benchmarks/results/apple-m4-macos.json (neon vs scalar, sizes 15..1M)"
+      ],
       "verification": [
         "scripts/verify-native-simd.sh asserts fmla/ld1/.4s in emitted aarch64 assembly (verified on Apple M4)",
         "Runtime detection via is_aarch64_feature_detected"
@@ -193,6 +197,27 @@
       "benchmarks": [],
       "verification": [],
       "notes": "avx512f is detected and reported but no AVX-512 kernel exists."
+    },
+    {
+      "capability": "reproducible benchmarks (native harness + criterion + browser page)",
+      "status": "implemented",
+      "implementation_files": [
+        "src/bench/mod.rs",
+        "src/bin/barq_bench.rs",
+        "benches/kernels.rs",
+        "docs/browser/benchmark.html"
+      ],
+      "correctness_tests": [
+        "tests/bench_integrity.rs (5 tests: incorrect implementations publish no timings; nonzero real durations; environment metadata recorded; no sleeps/fabricated durations in benchmark sources; checked-in JSON validated)"
+      ],
+      "benchmarks": [
+        "benchmarks/results/apple-m4-macos.json (98 workload records, Apple M4, macOS, neon backend, git commit + environment embedded)"
+      ],
+      "verification": [
+        "Every workload verifies its result against the scalar reference before timing; barq-bench exits non-zero if any candidate is incorrect",
+        "Size sweep 15..1_000_000 and matrices 16..256; results consumed via black_box; warmup + median/p90/p95/stddev recorded"
+      ],
+      "notes": "Browser page measures JS baseline vs wasm scalar/unrolled/simd128 with identical methodology; browser numbers are not published automatically."
     }
   ]
 }
