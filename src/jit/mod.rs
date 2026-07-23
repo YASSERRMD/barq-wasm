@@ -88,7 +88,7 @@ impl JitDotProduct {
 
             let zero_i = b.ins().iconst(types::I64, 0);
             let zero_f = b.ins().f32const(0.0);
-            b.ins().jump(header, &[zero_i, zero_f]);
+            b.ins().jump(header, &[zero_i.into(), zero_f.into()]);
 
             b.switch_to_block(header);
             let i = b.block_params(header)[0];
@@ -108,7 +108,7 @@ impl JitDotProduct {
             let acc_next = b.ins().fadd(acc, prod);
             let one = b.ins().iconst(types::I64, 1);
             let i_next = b.ins().iadd(i, one);
-            b.ins().jump(header, &[i_next, acc_next]);
+            b.ins().jump(header, &[i_next.into(), acc_next.into()]);
             b.seal_block(header);
 
             b.switch_to_block(exit);

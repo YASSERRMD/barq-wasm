@@ -19,8 +19,8 @@ use std::time::Duration;
 use wasmtime::{
     Engine, Instance, Linker, Module, Store, StoreLimits, StoreLimitsBuilder, Trap, Val,
 };
-use wasmtime_wasi::pipe::MemoryOutputPipe;
-use wasmtime_wasi::preview1::WasiP1Ctx;
+use wasmtime_wasi::p1::WasiP1Ctx;
+use wasmtime_wasi::p2::pipe::MemoryOutputPipe;
 use wasmtime_wasi::WasiCtxBuilder;
 
 /// Per-store host state: WASI context and resource limits.
@@ -106,7 +106,7 @@ impl Runtime {
 
         let mut linker: Linker<RuntimeState> = Linker::new(&engine);
         if config.enable_wasi {
-            wasmtime_wasi::preview1::add_to_linker_sync(&mut linker, |state| &mut state.wasi)
+            wasmtime_wasi::p1::add_to_linker_sync(&mut linker, |state| &mut state.wasi)
                 .map_err(|e| BarqError::RuntimeNotInitialized(e.to_string()))?;
         }
         if config.enable_barq_abi {
@@ -336,6 +336,7 @@ fn extern_kind(ty: &wasmtime::ExternType) -> String {
         wasmtime::ExternType::Memory(_) => "memory".to_string(),
         wasmtime::ExternType::Global(_) => "global".to_string(),
         wasmtime::ExternType::Table(_) => "table".to_string(),
+        other => format!("{other:?}").to_lowercase(),
     }
 }
 
