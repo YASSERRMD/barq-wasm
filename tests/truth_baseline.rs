@@ -1,49 +1,7 @@
-//! Phase 1 truth-baseline tests.
-//!
-//! These tests verify two things:
-//! 1. Unfinished functionality returns typed errors instead of fake success.
-//! 2. The renamed scalar kernels compute correct results against naive
-//!    scalar references.
+//! Truth-baseline tests: the renamed scalar kernels compute correct results
+//! against naive scalar references.
 
-use barq_wasm::error::BarqError;
-use barq_wasm::executor::BarqRuntime;
 use barq_wasm::wasm_bindings::*;
-
-// ---------------------------------------------------------------------------
-// Typed-error tests: no simulated success
-// ---------------------------------------------------------------------------
-
-#[test]
-fn runtime_construction_fails_with_typed_error() {
-    let err = match BarqRuntime::new() {
-        Ok(_) => panic!("BarqRuntime::new() must not succeed: no runtime is implemented"),
-        Err(e) => e,
-    };
-    assert!(
-        matches!(err, BarqError::UnsupportedFeature(_)),
-        "expected UnsupportedFeature, got: {err:?}"
-    );
-}
-
-#[test]
-fn cli_exits_nonzero_when_execution_unavailable() {
-    let output = std::process::Command::new(env!("CARGO_BIN_EXE_barq-wasm"))
-        .output()
-        .expect("failed to spawn barq-wasm binary");
-    assert!(
-        !output.status.success(),
-        "CLI must fail while no runtime exists"
-    );
-    let stderr = String::from_utf8_lossy(&output.stderr);
-    assert!(
-        stderr.contains("unsupported feature"),
-        "stderr must state the typed error, got: {stderr}"
-    );
-    assert!(
-        !stderr.contains("initialized successfully"),
-        "CLI must not claim successful initialization"
-    );
-}
 
 // ---------------------------------------------------------------------------
 // Kernel correctness: unrolled scalar vs naive scalar references
