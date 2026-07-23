@@ -1,5 +1,7 @@
 #[cfg(feature = "analyzer")]
 pub mod analyzer;
+#[cfg(feature = "bench-tool")]
+pub mod bench;
 pub mod error;
 #[cfg(feature = "jit-specialization")]
 pub mod jit;
