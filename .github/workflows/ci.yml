@@ -24,6 +24,8 @@ jobs:
       run: cargo doc --no-deps --all-features
     - name: Truthfulness gate
       run: ./scripts/check-truthfulness.sh
+    - name: Generated documentation is current
+      run: python3 scripts/generate-docs.py --check
 
   # Cross-platform build + full test suite.
   test:
