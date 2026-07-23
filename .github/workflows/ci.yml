@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [ main, phase-0-setup ]
+    branches: [ main ]
   pull_request:
     branches: [ main ]
 
@@ -14,11 +14,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v3
+    - name: Check formatting
+      run: cargo fmt -- --check
+    - name: Clippy
+      run: cargo clippy --all-targets --all-features -- -D warnings
     - name: Build
       run: cargo build --verbose
     - name: Run tests
       run: cargo test --verbose
-    - name: Check formatting
-      run: cargo fmt -- --check
-    - name: Clippy
-      run: cargo clippy -- -D warnings
+    - name: Validate implementation-status.json
+      run: python3 -c "import json; json.load(open('implementation-status.json'))"

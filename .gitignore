@@ -14,3 +14,4 @@ Thumbs.db
 
 # Temporary benchmark files
 /temp_bench/
+/pkg/
