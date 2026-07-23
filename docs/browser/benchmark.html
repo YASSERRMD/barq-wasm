@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Barq-WASM browser benchmark harness</title>
+  <style>
+    body { font-family: system-ui, sans-serif; margin: 2rem; max-width: 60rem; }
+    table { border-collapse: collapse; margin-top: 1rem; }
+    td, th { border: 1px solid #999; padding: 0.3rem 0.6rem; text-align: right; }
+    th:first-child, td:first-child { text-align: left; }
+    .bad { color: #b00; font-weight: bold; }
+    pre { background: #f5f5f5; padding: 1rem; overflow: auto; }
+  </style>
+</head>
+<body>
+  <h1>Barq-WASM browser benchmark harness</h1>
+  <p>
+    Methodology: SIMD support is feature-detected before loading a bundle;
+    every workload's result is verified against the scalar reference
+    <em>before</em> timing; warm-up runs precede measurement; statistics are
+    median/p90/p95/stddev over many samples with <code>performance.now()</code>.
+    The JavaScript baseline runs the same algorithm with the same warm-up and
+    sample counts on the same data. Environment metadata is recorded with the
+    results. No numbers are published anywhere from this page automatically —
+    use the JSON download and record the hardware.
+  </p>
+  <button id="run">Run benchmarks</button>
+  <span id="status"></span>
+  <div id="out"></div>
+  <h2>Results JSON</h2>
+  <pre id="json">(run first)</pre>
+
+<script type="module">
+import { loadBarqWasm, simdSupported } from "./loader.js";
+
+const WARMUP = 20;
+const SAMPLES = 50;
+const SIZES = [1024, 16384, 100000, 500000];
+
+function pseudoRandom(len, seed) {
+  const out = new Float32Array(len);
+  let state = BigInt(seed) | 1n;
+  const MUL = 6364136223846793005n, INC = 1442695040888963407n, MASK = (1n << 64n) - 1n;
+  for (let i = 0; i < len; i++) {
+    state = (state * MUL + INC) & MASK;
+    const unit = Number(state >> 33n) / 2147483648.0;
+    out[i] = unit * 200.0 - 100.0;
+  }
+  return out;
+}
+
+function jsDot(a, b) {
+  let sum = 0.0;
+  for (let i = 0; i < a.length; i++) sum += a[i] * b[i];
+  return sum;
+}
+
+function stats(samples) {
+  const s = [...samples].sort((x, y) => x - y);
+  const n = s.length;
+  const mean = s.reduce((acc, v) => acc + v, 0) / n;
+  const sd = Math.sqrt(s.reduce((acc, v) => acc + (v - mean) ** 2, 0) / n);
+  const pick = q => s[Math.min(n - 1, Math.floor(n * q / 100))];
+  return { min_ms: s[0], median_ms: s[Math.floor(n / 2)], p90_ms: pick(90),
+           p95_ms: pick(95), max_ms: s[n - 1], mean_ms: mean, stddev_ms: sd };
+}
+
+function measure(fn) {
+  for (let i = 0; i < WARMUP; i++) fn();
+  const samples = [];
+  for (let i = 0; i < SAMPLES; i++) {
+    const t0 = performance.now();
+    fn();
+    samples.push(performance.now() - t0);
+  }
+  return stats(samples);
+}
+
+function close(a, b, tol) {
+  return Math.abs(a - b) <= tol * Math.max(Math.abs(a), Math.abs(b), 1.0);
+}
+
+document.getElementById("run").onclick = async () => {
+  const status = document.getElementById("status");
+  status.textContent = "loading bundle...";
+  const { module: mod, bundle } = await loadBarqWasm("..");
+  const results = [];
+  const rows = [];
+
+  for (const size of SIZES) {
+    status.textContent = `running size ${size}...`;
+    await new Promise(r => setTimeout(r, 0));
+    const a = pseudoRandom(size, 1);
+    const b = pseudoRandom(size, 2);
+    const reference = mod.dot_product_scalar(a, b);
+
+    const workloads = [
+      ["js_baseline", () => jsDot(a, b), jsDot(a, b)],
+      ["wasm_scalar", () => mod.dot_product_scalar(a, b), reference],
+      ["wasm_unrolled_scalar", () => mod.dot_product_unrolled_scalar(a, b),
+        mod.dot_product_unrolled_scalar(a, b)],
+    ];
+    if (bundle === "simd") {
+      workloads.push(["wasm_simd128", () => mod.dot_product_simd128(a, b),
+        mod.dot_product_simd128(a, b)]);
+    }
+
+    for (const [name, fn, value] of workloads) {
+      const correct = close(value, reference, 1e-3);
+      const rec = { workload: "dot_product_f32", backend: name, size, correct,
+                    warmup: WARMUP, samples: SAMPLES,
+                    stats: correct ? measure(fn) : null };
+      results.push(rec);
+      rows.push(rec);
+    }
+  }
+
+  const report = {
+    environment: {
+      user_agent: navigator.userAgent,
+      hardware_concurrency: navigator.hardwareConcurrency,
+      simd_supported: simdSupported(),
+      bundle_loaded: bundle,
+      bundle_simd128_enabled: mod.simd128_enabled(),
+      timestamp: new Date().toISOString(),
+      note: "record CPU model and machine manually when publishing",
+    },
+    results,
+  };
+
+  let html = "<table><tr><th>backend</th><th>size</th><th>correct</th>" +
+             "<th>median ms</th><th>p95 ms</th><th>stddev</th></tr>";
+  for (const r of rows) {
+    html += `<tr><td>${r.backend}</td><td>${r.size}</td>` +
+            `<td class="${r.correct ? "" : "bad"}">${r.correct}</td>` +
+            `<td>${r.stats ? r.stats.median_ms.toFixed(4) : "—"}</td>` +
+            `<td>${r.stats ? r.stats.p95_ms.toFixed(4) : "—"}</td>` +
+            `<td>${r.stats ? r.stats.stddev_ms.toFixed(4) : "—"}</td></tr>`;
+  }
+  html += "</table>";
+  document.getElementById("out").innerHTML = html;
+  document.getElementById("json").textContent = JSON.stringify(report, null, 2);
+  status.textContent = "done";
+};
+</script>
+</body>
+</html>
