@@ -15,3 +15,5 @@ Thumbs.db
 # Temporary benchmark files
 /temp_bench/
 /pkg/
+verification-report.json
+verification-report.md

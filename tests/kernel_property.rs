@@ -26,7 +26,10 @@ proptest! {
         let b: Vec<f32> = pair.iter().map(|(_, y)| *y).collect();
         let reference = dot_product_scalar(&a, &b).unwrap();
         let caps = cpu_capabilities();
-        let tol = 1e-3 * reference.abs().max(1.0);
+        // Different valid summation orders diverge in proportion to the sum
+        // of |a_i * b_i| (worst under cancellation), not to the result.
+        let abs_sum: f32 = a.iter().zip(&b).map(|(x, y)| (x * y).abs()).sum();
+        let tol = 1e-4 * abs_sum + 1e-3;
         if caps.avx2 {
             prop_assert!((dot_product_avx2(&a, &b).unwrap() - reference).abs() <= tol);
         }

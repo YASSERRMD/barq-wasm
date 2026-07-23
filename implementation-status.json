@@ -1,6 +1,6 @@
 {
   "$comment": "Machine-readable capability status. Every advertised capability must appear here. 'implemented' requires implementation + correctness tests + verification; anything less is 'partial' or 'absent'. Checked in CI.",
-  "updated_for_phase": 7,
+  "updated_for_phase": 8,
   "capabilities": [
     {
       "capability": "native WebAssembly module execution (validate/load/instantiate/invoke)",
@@ -218,6 +218,27 @@
         "Size sweep 15..1_000_000 and matrices 16..256; results consumed via black_box; warmup + median/p90/p95/stddev recorded"
       ],
       "notes": "Browser page measures JS baseline vs wasm scalar/unrolled/simd128 with identical methodology; browser numbers are not published automatically."
+    },
+    {
+      "capability": "verification-driven CI and acceptance command",
+      "status": "implemented",
+      "implementation_files": [
+        ".github/workflows/ci.yml",
+        "scripts/check-truthfulness.sh",
+        "xtask/src/main.rs",
+        "tests/fuzz_smoke.rs"
+      ],
+      "correctness_tests": [
+        "tests/fuzz_smoke.rs (randomized/mutated modules and hostile float inputs never panic)",
+        "cargo xtask verify-all runs every verification layer and reports PASS/FAIL/NOT RUN"
+      ],
+      "benchmarks": [],
+      "verification": [
+        "CI matrix: Linux x86-64, macOS ARM64, Windows x86-64 (build+tests); release SIMD tests + assembly verification on x86-64 and arm64; browser tests (Chrome both bundles, Firefox simd) with binary instruction verification; MSRV 1.87 check; docs build; benchmark integrity; truthfulness grep + status-file consistency gate",
+        "Non-blocking signal jobs: cargo-audit, AddressSanitizer over kernel tests",
+        "verify-all writes verification-report.json/.md; NOT RUN is never reported as PASS"
+      ],
+      "notes": "Coverage reporting and Miri are not wired into CI yet; nothing claims they are."
     }
   ]
 }

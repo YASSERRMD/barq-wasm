@@ -10,37 +10,76 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  build:
+  # Formatting, lints, docs, and the truthfulness gate.
+  checks:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
+    - uses: dtolnay/rust-toolchain@stable
     - name: Check formatting
-      run: cargo fmt -- --check
-    - name: Clippy
-      run: cargo clippy --all-targets --all-features -- -D warnings
+      run: cargo fmt --check
+    - name: Clippy (all targets, all features, deny warnings)
+      run: cargo clippy --workspace --all-targets --all-features -- -D warnings
+    - name: Docs build
+      run: cargo doc --no-deps --all-features
+    - name: Truthfulness gate
+      run: ./scripts/check-truthfulness.sh
+
+  # Cross-platform build + full test suite.
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+    - uses: actions/checkout@v4
+    - uses: dtolnay/rust-toolchain@stable
     - name: Build
       run: cargo build --verbose
-    - name: Run tests (default features)
+    - name: Test (default features)
       run: cargo test --verbose
-    - name: Run tests (all features, incl. JIT specialization)
+    - name: Test (all features, incl. JIT specialization)
       run: cargo test --all-features --verbose
-    - name: Validate implementation-status.json
-      run: python3 -c "import json; json.load(open('implementation-status.json'))"
-    - name: Verify native SIMD instructions in assembly
+
+  # Release-mode tests plus native SIMD verification per architecture.
+  native-simd:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest   # x86-64: AVX2/FMA expected on GH runners
+          - os: macos-latest    # arm64: NEON
+    runs-on: ${{ matrix.os }}
+    steps:
+    - uses: actions/checkout@v4
+    - uses: dtolnay/rust-toolchain@stable
+    - name: Release kernel tests (executes SIMD paths on this host)
+      run: cargo test --release --test kernel_differential --test kernel_force_env --test kernel_property
+    - name: Report selected kernel backend
+      run: cargo test --release --test kernel_differential -- --nocapture at_least_one_simd_backend
+    - name: Verify SIMD instructions in emitted assembly
       run: ./scripts/verify-native-simd.sh
-    - name: Benchmark integrity (correctness gates, no sleeps, valid checked-in JSON)
+
+  # Benchmark integrity: correctness gates, no sleeps, valid checked-in JSON.
+  benchmarks:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - uses: dtolnay/rust-toolchain@stable
+    - name: Benchmark integrity tests
       run: cargo test --features bench-tool --test bench_integrity
     - name: Benchmark smoke run (real work, quick settings)
       run: cargo run --release --features bench-tool --bin barq-bench -- --quick --out /tmp/bench-smoke.json
     - name: Criterion benches compile
       run: cargo bench --no-run
-    - name: Report selected kernel backend
-      run: cargo test --release --test kernel_differential -- --nocapture at_least_one_simd_backend
 
+  # Browser WASM: both bundle configurations, instruction verification,
+  # and real headless-browser correctness tests.
   wasm:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
     - uses: dtolnay/rust-toolchain@stable
       with:
         targets: wasm32-unknown-unknown
@@ -58,3 +97,38 @@ jobs:
       run: RUSTFLAGS="-C target-feature=-simd128" wasm-pack test --headless --chrome --no-default-features --features browser
     - name: Browser tests (Firefox, simd bundle)
       run: RUSTFLAGS="-C target-feature=+simd128" wasm-pack test --headless --firefox --no-default-features --features browser
+
+  # Minimum supported Rust version.
+  msrv:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - uses: dtolnay/rust-toolchain@master
+      with:
+        toolchain: "1.87"
+    - name: Check with MSRV
+      run: cargo check --all-features
+
+  # Dependency security advisories. Non-blocking: new upstream advisories
+  # must not freeze unrelated merges, but the signal stays visible.
+  audit:
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+    - uses: actions/checkout@v4
+    - uses: taiki-e/install-action@cargo-audit
+    - name: Cargo audit
+      run: cargo audit
+
+  # AddressSanitizer over the unsafe SIMD kernels (nightly). Non-blocking
+  # signal; failures are investigated but don't gate unrelated changes.
+  sanitizer:
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+    - uses: actions/checkout@v4
+    - uses: dtolnay/rust-toolchain@nightly
+      with:
+        components: rust-src
+    - name: Kernel tests under AddressSanitizer
+      run: RUSTFLAGS="-Zsanitizer=address" cargo +nightly test -Zbuild-std --target x86_64-unknown-linux-gnu --test kernel_differential
